@@ -87,9 +87,9 @@ if ($mp3Files.Count -eq 0) {
 
 foreach ($file in $mp3Files) {
     $baseName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
-    $outputFile = Join-Path $OutputDir ("{0}_cleaned.mp3" -f $baseName)
+   # $outputFile = Join-Path $OutputDir ("{0}_cleaned.mp3" -f $baseName)
     $silenceLog = Join-Path $logDir ("{0}_silence.log" -f $baseName)
-    $auditLog = Join-Path $logDir ("{0}.log" -f $baseName)
+    #$auditLog = Join-Path $logDir ("{0}.log" -f $baseName)
 
     Write-Log "Inspecting: $($file.FullName)"
 
@@ -108,33 +108,49 @@ foreach ($file in $mp3Files) {
         continue
     }
 
+    write-host $probeResult -ForegroundColor Green
+
     # rms step will create rms.csv file of data to pass to the trim step
-        $analysisLogDir = Join-Path $OutputDir 'logs'
-        $rmsScript = Join-Path $scriptRoot 'process_rms_level.ps1'
-        $silenceScript = Join-Path $scriptRoot 'process_silence4.ps1'
-        $inpScript = Join-Path $scriptRoot 'process_interpolate.ps1'
-        # trim step will delete the sections identified and output a new completed mp3 file
-        $deleteFile = Join-Path $InputDir "$baseName.RMS.csv"
-        $trimScript = Join-Path $scriptRoot 'process_trim3.ps1'
-        
-       # 1 RMS
-     ####   & $rmsScript -dd $InputDir -logPath $analysisLogDir -InputFile $file.FullName -OutputCsv "$baseName.csv"
+    $analysisLogDir = Join-Path $OutputDir 'logs'
+    $rmsScript = Join-Path $scriptRoot 'process_rms_level1.ps1'
+    $silenceScript = Join-Path $scriptRoot 'process_silence4.ps1'
+    $inpScript = Join-Path $scriptRoot 'process_interpolate.ps1'
+    $prpScript = Join-Path $scriptRoot 'process_preppolate.ps1'
+    # trim step will delete the sections identified and output a new completed mp3 file
+    $deleteFile = Join-Path $InputDir "$baseName.RMS.csv"
+    $trimScript = Join-Path $scriptRoot 'process_trim3.ps1'
+    
 
-       # 2 process silence
-       & $silenceScript -inputDir $InputDir -logPath $silenceLog -InputFile $file.FullName -OutputLog "$baseName.sil.log" -OutputCsv "$baseName.sil.csv"
-      
-      # tag the loud  sections and
-      # 1 reduce pitch
-      # 2 amplify -6db
+    $allParams = @{
+        inputDir  = $InputDir
+        logPath   = $analysisLogDir
+        InputFile = $file.FullName
+        OutputCsv = "$baseName.csv"
+        OutputLog = "$baseName.sil.log"
+        DeleteFile = $deleteFile
+    }
+    & $rmsScript @allParams
+    <# 1 RMS
+    & $rmsScript -inputDir $InputDir -logPath $analysisLogDir -InputFile $file.FullName -OutputCsv "$baseName.csv"
+
+    # 2 process silence #>
+    #& $silenceScript -inputDir $InputDir -logPath $silenceLog -InputFile $file.FullName -OutputLog "$baseName.sil.log" -OutputCsv "$baseName.sil.csv"
+    
+    # tag the loud  sections and
+    # 1 reduce pitch
+    # 2 amplify -6db
+
+    
+    # 3  interpolate 
+    # $inpScript -dd $InputDir -logPath $analysisLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $deleteFile
+
+    # 4  prepolate #
+    # $prpScript -dd $InputDir -logPath $analysisLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $deleteFile
 
 
-        
-      # 3  interpolate
-        & $inpScript -dd $InputDir -logPath $analysisLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $deleteFile
-
-        # 4 trim and delete
-        $trimOutput = Join-Path $OutputDir "$baseName.mp3"
-        & $trimScript -dd $InputDir -logPath $analysisLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $trimOutput
+    # 5 trim and delete
+    $trimOutput = Join-Path $OutputDir "$baseName.mp3"
+  #  & $trimScript -dd $InputDir -logPath $analysisLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $trimOutput
 
 }
 

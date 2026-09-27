@@ -1,6 +1,6 @@
-<# interpolate the delete markers
+<# preppolate the delete markers
 -------------------------------------------------------------------------------------
-    ensure delete sections in the delete file are continuous
+    ensure delete section that the pre deletes are fully identified
 #>
 
 [CmdletBinding()]
@@ -8,12 +8,13 @@ param (
     [string]$dd = 'F:\av\audio\downloads',
     [string]$logPath = '\logs',
     [string]$InputFile = 'USDIESEL.mp3',
-    [string]$DeleteFile = 'USDIESEL.RMS.csv', # analysed rms levels result that show the sections to be deleted
-    [string]$OutputFile = 'USDIESEL.RMS2.csv'
+    [string]$DeleteFile = 'DELETE1.RMS.csv', # analysed rms levels result that show the sections to be deleted
+    [string]$OutputFile = 'DELETE2.RMS.csv'  # RESULT IS OUTPUT 
 )
    
+    $debug=1
     $startFrame = 0   # about 38 frames per second
-    $minGap = 350 # interpolate only when gap is less than 200
+    $minGap = 350 # preppolate only when gap is less than 200
     $maxGap = 500 # if gap is less than 500 then tag an reduce volume filter to be applied.
     $sectionLength=0
     $data = @(Import-Csv -LiteralPath $DeleteFile -Delimiter ',')
@@ -24,6 +25,25 @@ param (
     # read the values in the data file as a PSobject table
     foreach ($row in $data) {
         
+        if ($debug){
+            $frm=$row.Frame
+            $secs=[int]($row.pts_time/60)
+            $del=$row.delete
+            if ($del -ne 1){
+                $sequence0Count++
+                $sequence1Count=0
+                if ($sequence0Count -gt 9999){ write-host "$frm $secs $del $sequence0Count" -BackgroundColor green -ForegroundColor black}
+                 else {write-host "$frm $secs $del $sequence0Count" -BackgroundColor Black -ForegroundColor green}
+            }
+            if ($del -eq 1){
+                $sequence0Count=0
+                $sequence1Count++
+                if ($sequence1Count -gt 999){ write-host "$frm $secs $del $sequence1Count" -BackgroundColor red -ForegroundColor black}
+                 else {write-host "$frm $secs $del $sequence0Count" -BackgroundColor Black -ForegroundColor red}
+
+                write-host "$frm $secs $del $sequence1Count" -BackgroundColor red
+            }           
+        }
         # read the delete column values 
         $deleteValue = if ($row.PSObject.Properties.Name -contains 'delete') {
             [int]$row.delete
@@ -65,13 +85,13 @@ param (
     }
 
 
-    remove-item $OutputFile # replace the output file with new interpolated version
+    remove-item $OutputFile # replace the output file with new preppolated version
     if (test-path $OutputFile){
         write-host "still exists $outputFile"
     }
     else {
         $data | Export-Csv -LiteralPath $OutputFile -NoTypeInformation
-        Write-Host "interpolated CSV: $OutputFile"
+        Write-Host "preppolated CSV: $OutputFile"
     }
 
 
