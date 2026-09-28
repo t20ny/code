@@ -1,4 +1,4 @@
-<# trim3
+<# trim and delete                                              v1.0.3
 -------------------------------------------------------------------------------------
 aselect will select audio sections we want to keep
     delete the sections as per the delete file
@@ -8,9 +8,9 @@ aselect will select audio sections we want to keep
 param (
     [string]$dd = 'F:\av\audio\downloads',
     [string]$logPath = '\logs',
-    [string]$InputFile = 'USDIESEL.mp3',
-    [string]$DeleteFile = 'USDIESEL.RMS.csv', # analysed rms levels result that show the sections to be deleted
-    [string]$OutputFile = 'USDIESEL2.mp3'
+    [string]$InputFile = 'USSEL.mp3',
+    [string]$DeleteFile = 'USSEL.RMS.csv', # analysed rms levels result that show the sections to be deleted
+    [string]$OutputFile = 'USSEL2.mp3'
 )
    
     Set-Location -LiteralPath $dd
@@ -34,6 +34,9 @@ param (
         throw "Delete CSV not found: $DeleteFile"
     }
     
+    Write-Host "========= trim and delete      ==============================================" -ForegroundColor Blue
+    write-host "reading =  $DeleteFile"
+
     
     try {
         # import the csv data file with first row headers

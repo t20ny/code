@@ -1,3 +1,9 @@
+<# process main                                                          v1.0.0
+-------------------------------------------------------------------------------------
+    get RMS data points, analyse, mark delete sections,
+    interpolate to ensure delete sections continuous
+    trim and delete
+#>
 param(
     [string]$InputDir = 'F:\av\audio\downloads',
     [string]$OutputDir = 'F:\av\audio\done',
@@ -97,7 +103,7 @@ foreach ($file in $mp3Files) {
     $prevErrorPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        write-host "===== probe ===================================================" -BackgroundColor blue
+        write-host "===== probe ===================================================" -ForegroundColor blue
         $probeResult = & ffprobe @probeArgs 2>$null
     }
     finally {
@@ -108,7 +114,7 @@ foreach ($file in $mp3Files) {
         continue
     }
 
-    write-host $probeResult -ForegroundColor Green
+    write-host "$probeResult seconds  $($probeResult/60) minutes" 
 
     # rms step will create rms.csv file of data to pass to the trim step
     $analysisLogDir = Join-Path $OutputDir 'logs'
@@ -129,12 +135,15 @@ foreach ($file in $mp3Files) {
         OutputLog = "$baseName.sil.log"
         DeleteFile = $deleteFile
     }
+    
+    # 1 RMS
     & $rmsScript @allParams
-    <# 1 RMS
-    & $rmsScript -inputDir $InputDir -logPath $analysisLogDir -InputFile $file.FullName -OutputCsv "$baseName.csv"
+    # & $rmsScript -inputDir $InputDir -logPath $analysisLogDir -InputFile $file.FullName -OutputCsv "$baseName.csv"
 
-    # 2 process silence #>
-    #& $silenceScript -inputDir $InputDir -logPath $silenceLog -InputFile $file.FullName -OutputLog "$baseName.sil.log" -OutputCsv "$baseName.sil.csv"
+   
+    # 2 process silence 
+    # & $silenceScript @allParams
+    & $silenceScript -inputDir $InputDir -logPath $silenceLog -InputFile $file.FullName -OutputLog "$baseName.sil.log" -OutputCsv "$baseName.sil.csv"
     
     # tag the loud  sections and
     # 1 reduce pitch
@@ -142,7 +151,7 @@ foreach ($file in $mp3Files) {
 
     
     # 3  interpolate 
-    # $inpScript -dd $InputDir -logPath $analysisLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $deleteFile
+    & $inpScript -inputdir $InputDir -logPath $analysisLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $deleteFile
 
     # 4  prepolate #
     # $prpScript -dd $InputDir -logPath $analysisLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $deleteFile
@@ -150,7 +159,7 @@ foreach ($file in $mp3Files) {
 
     # 5 trim and delete
     $trimOutput = Join-Path $OutputDir "$baseName.mp3"
-  #  & $trimScript -dd $InputDir -logPath $analysisLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $trimOutput
+    & $trimScript -dd $InputDir -logPath $analysisLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $trimOutput
 
 }
 

@@ -1,8 +1,12 @@
+<# process RMS                                                          v1.0.0
+-------------------------------------------------------------------------------------
+    get RMS data points, analyse, mark delete sections
+#>
 param(
     [string]$inputDir = 'F:\av\audio\downloads',
     [string]$OutputDir = 'F:\av\audio\done',
     [string]$logPath = 'logs',    
-    [string]$InputFile = 'THE SECRET WAR FOR THE CONTROL OF HORMUZ WHO IS WINNING w Tanker Trackers Founder.20609.mp3',
+    [string]$InputFile = 'THE609.mp3',
     [string]$OutputCsv = 'rms.csv'
 )
 $debug=1
@@ -16,6 +20,9 @@ $windowSize=200  # Theil–Sen regression window 38 frames per second so v1=200 
 
 $speechLvl=-50   # if rms level below Lvl then this window is speech   v2=-50
 $windowSize=240  # Theil–Sen regression window 38 frames per second so v2=240 about 6 seconds
+
+$speechLvl=-60   # if rms level below Lvl then this window is speech   v3=-50
+$windowSize=160  # Theil–Sen regression window 38 frames per second so v3=120 about 3 seconds
 
 
 function getRMS {
@@ -140,7 +147,6 @@ function analyzeRMS {
                 $spMin = ($spWindow | Measure-Object -Minimum).Minimum
              
                 # regression analysis of the gradient deltas
-                # $tsWindow.Enqueue($diff)
                 $tsWindow.Enqueue([math]::Abs($diff))   # absolute values of the gradients
                 if ($tsWindow.Count -gt $windowSize) {
                     $null = $tsWindow.Dequeue() 
@@ -148,24 +154,15 @@ function analyzeRMS {
                 $tsAvg = ($tsWindow | Measure-Object -Average).Average
                 $tsMin = ($TSWindow | Measure-Object -Minimum).Minimum
                 $tsMax = ($TSWindow | Measure-Object -Maximum).Maximum
-
-                # Median of the average
-              
-                #$tsAvW.Enqueue($tsAvg)  
-                #if ($tsAvW.Count -gt $windowSize) {  $null = $tsAvW.Dequeue()    }
-                #$tsMin = ($TSAvW | Measure-Object -Minimum).Minimum
-                #$tsMax = ($TSAvW | Measure-Object -Maximum).Maximum
-
                 $tsMed = ([double]$tsMin + [double]$tsMax)/2
      
                 # prediction 1
-                # $pdct1 = if ($tsAvg -ge $threshold) { 1 } else { 0 }
                 $pdct1 = if ($spMin -lt $speechLvl) { 0 } 
-                     elseif ($tsAvg -gt 0.001) { 1 } 
-                    else { 0 }
+                     elseif ($tsAvg -gt 6) { 0 } 
+                    else { 1 }
              
-                $category = if ($spMin -lt $speechLvl) { "speech" } 
-                        elseif ($tsMed -gt 10) {  "comMed" }
+                $category = if ($spMin -lt $speechLvl) { "speechSp" } 
+                        elseif ($tsMed -gt 10) {  "SpeechMed" }
                         else { "comElse" }
            
             }
@@ -268,13 +265,13 @@ $baseName = [System.IO.Path]::GetFileNameWithoutExtension($inputPath)
 $logName = Join-Path $logDirectory ("{0}.rms.log" -f $baseName)
 $logFileName = Split-Path -Leaf $logName
 
-Write-Host "========= analyze RMS       ==============================================" -BackgroundColor Blue
+Write-Host "========= analyze RMS       ==============================================" -foregroundColor Blue
 #if ($debug){Write-Host "===== analyze RMS $inputPath   -analyzeLog $logName -OutputCsv $OutputCsv" -BackgroundColor Blue}
 Push-Location -LiteralPath $logDirectory
 try {
   Write-Host "[1]====== get RMS  "
   if (test-path $logFileName){
-    Write-Host "[1]====== Use the existing RMS file  $logFileName " -forgroundcolor yellow
+    Write-Host "[1]====== Use the existing RMS file  $logFileName " -foregroundcolor yellow
   }
   else {
     Write-Host "[1]====== get RMS  "
@@ -289,6 +286,6 @@ while ($attemps -ge 1) {
     $attemps--
     Write-Host "[2]====== analysing the data ...  "
     $attemps = [int](analyzeRMS -fName $inputPath -logName $logName -OutputCsv $OutputCsv)
-    if ($speechLvl -gt -50){exit}
+    if ($speechLvl -ge -30){exit}
 }
 

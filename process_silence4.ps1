@@ -1,12 +1,12 @@
-<# silence 4
+<# silence                                            v1.0.4
    silence detect and analyse
 #>
 param(
     [string]$InputDir="F:\av\audio\downloads",
     [string]$logPath= '\logs',    
-    [string]$InputFile="EUROPE.mp3",
+    [string]$InputFile="EUE.mp3",
     [string]$OutputLog="silence.log",
-    [string]$OutputCsv = "EUROPE.csv"
+    [string]$OutputCsv = "EUE.csv"
 )
 $debug=0
 Set-Location $InputDir
@@ -140,9 +140,8 @@ function Analyze-Silence {
     #$OutputCsv = $OutputCsv -replace '\.csv$', '.silence.csv'
     $result | Export-Csv -LiteralPath $OutputCsv -NoTypeInformation
     
-    Write-Host "===== Silence output   $OutputCsv             ================" -BackgroundColor Blue
+    Write-Host "=========  Silence output   $OutputCsv " 
 }
-    Write-Host "===== analyze silence  $InputFile   ======================================" -BackgroundColor Blue
-# Write-Host 'disabled.'
-#$InputFile="silence3.mp3"
+    Write-Host "========= analyze silence    ======================================" -foregroundColor Blue
+    Write-Host "Input   =  $InputFile"
 Analyze-Silence -Fname $InputFile -LogName $OutputLog
