@@ -5,7 +5,6 @@
     short speech sections (0) are also filled to avoid speech fragmentation
     long speech runs of 0-values
     short delete sections (1) inside speech are cleared back to 0 unless closely followed by another delete section.
-    Use the RMS3.csv file to identify the algorithm needed. RMS3 is the manually corrected file.
     Both ends of the file should be marked as delete sections (1)
 #>
 
@@ -21,10 +20,11 @@ param (
 )
    
     $framesPerSecond = 38
-    $minGap = $framesPerSecond * 6
+    $minGap       = $framesPerSecond * 6
+    $preDeleteRun = $framesPerSecond * 3
     $minDeleteRun = $framesPerSecond * 20
-    $endsDelete = $framesPerSecond * 6
-
+    $endsDelete   = $framesPerSecond * 6
+    
     $sourceCandidates = @(
         $DeleteFile,
         (Join-Path $OutputDir $DeleteFile),
@@ -107,6 +107,27 @@ param (
         }
     }
 
+    
+    # pad preDelete to leading edge of the delete sections
+    for ($index = 0; $index -lt $data.Count;) {
+        if ([int]$data[$index].delete -ne 1) {
+            $index++
+            continue
+        }
+
+        $runStart = $index
+        while ($index -lt $data.Count -and [int]$data[$index].delete -eq 1) {
+            $index++
+        }
+
+        $padStart = [Math]::Max(0, $runStart - $preDeleteRun)
+        for ($padIndex = $padStart; $padIndex -lt $runStart; $padIndex++) {
+            $data[$padIndex].delete = 1
+        }
+    }
+
+
+    # Both ends of the file are padded as delete sections (1)
     $endSectionLength = [Math]::Min($endsDelete, $data.Count)
     for ($index = 0; $index -lt $endSectionLength; $index++) {
         $data[$index].delete = 1
@@ -115,6 +136,7 @@ param (
         $data[$index].delete = 1
     }
 
+    # save output
     $dest = if ([System.IO.Path]::IsPathRooted($OutputFile)) {
         $OutputFile
     }
@@ -134,4 +156,4 @@ param (
     }
 
     $data | Export-Csv -LiteralPath $dest -NoTypeInformation
-    Write-Host "ioutput =  $dest"
+    Write-Host "ipol out =  $dest"
