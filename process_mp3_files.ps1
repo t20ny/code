@@ -103,7 +103,7 @@ foreach ($file in $mp3Files) {
     $prevErrorPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        write-host "===== probe ===================================================" -ForegroundColor blue
+        write-host "#=#=#=#== probe ==#== $baseName ===== ===== =#=" -ForegroundColor blue
         $probeResult = & ffprobe @probeArgs 2>$null
     }
     finally {

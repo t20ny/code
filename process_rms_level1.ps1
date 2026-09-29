@@ -269,7 +269,6 @@ Write-Host "========= analyze RMS       ========================================
 #if ($debug){Write-Host "===== analyze RMS $inputPath   -analyzeLog $logName -OutputCsv $OutputCsv" -BackgroundColor Blue}
 Push-Location -LiteralPath $logDirectory
 try {
-  Write-Host "[1]====== get RMS  "
   if (test-path $logFileName){
     Write-Host "[1]====== Use the existing RMS file  $logFileName " -foregroundcolor yellow
   }

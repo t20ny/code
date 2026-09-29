@@ -1,4 +1,4 @@
-<# interpolate the delete markers                                             v0.1.0
+<# interpolate the delete markers                                             v0.1.1
 -------------------------------------------------------------------------------------
     interpolate to ensure delete sections of 0-values in the rms1.csv file are continuous
     short gaps between delete sections (1) are filled so delete sections stay continuous
@@ -50,7 +50,7 @@ param (
 
     # read the values in the data file as a PSobject table
     foreach ($row in $data) {
-        
+        # step 1        
         # read the delete column values 
         $deleteValue = if ($row.PSObject.Properties.Name -contains 'delete') {
             [int]$row.delete
@@ -65,7 +65,26 @@ param (
             $row | Add-Member -NotePropertyName delete -NotePropertyValue $deleteValue
         }
     }
+    
+    # step 2
+    # pad preDelete to leading edge of the delete sections
+    for ($index = 0; $index -lt $data.Count;) {
+        if ([int]$data[$index].delete -ne 1) {
+            $index++
+            continue
+        }
 
+        $runStart = $index
+        while ($index -lt $data.Count -and [int]$data[$index].delete -eq 1) {
+            $index++
+        }
+
+        $padStart = [Math]::Max(0, $runStart - $preDeleteRun)
+        for ($padIndex = $padStart; $padIndex -lt $runStart; $padIndex++) {
+            $data[$padIndex].delete = 1
+        }
+    }
+    # step 3
     # Remove short false-positive delete runs before filling speech gaps.
     for ($index = 0; $index -lt $data.Count;) {
         if ([int]$data[$index].delete -eq 0) {
@@ -84,7 +103,7 @@ param (
             }
         }
     }
-
+    # step 4
     # Fill short speech gaps only when they are bounded by retained delete runs.
     for ($index = 0; $index -lt $data.Count;) {
         if ([int]$data[$index].delete -eq 1) {
@@ -106,27 +125,7 @@ param (
             }
         }
     }
-
-    
-    # pad preDelete to leading edge of the delete sections
-    for ($index = 0; $index -lt $data.Count;) {
-        if ([int]$data[$index].delete -ne 1) {
-            $index++
-            continue
-        }
-
-        $runStart = $index
-        while ($index -lt $data.Count -and [int]$data[$index].delete -eq 1) {
-            $index++
-        }
-
-        $padStart = [Math]::Max(0, $runStart - $preDeleteRun)
-        for ($padIndex = $padStart; $padIndex -lt $runStart; $padIndex++) {
-            $data[$padIndex].delete = 1
-        }
-    }
-
-
+    # step 5
     # Both ends of the file are padded as delete sections (1)
     $endSectionLength = [Math]::Min($endsDelete, $data.Count)
     for ($index = 0; $index -lt $endSectionLength; $index++) {
@@ -135,7 +134,7 @@ param (
     for ($index = $data.Count - $endSectionLength; $index -lt $data.Count; $index++) {
         $data[$index].delete = 1
     }
-
+    # step 6
     # save output
     $dest = if ([System.IO.Path]::IsPathRooted($OutputFile)) {
         $OutputFile
@@ -156,4 +155,4 @@ param (
     }
 
     $data | Export-Csv -LiteralPath $dest -NoTypeInformation
-    Write-Host "ipol out =  $dest"
+    Write-Host "ipol out=  $dest"

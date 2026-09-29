@@ -34,7 +34,7 @@ param (
         throw "Delete CSV not found: $DeleteFile"
     }
     
-    Write-Host "========= trim and delete      ==============================================" -ForegroundColor Blue
+    Write-Host "========= trim and delete   =============================================" -ForegroundColor Blue
     write-host "reading =  $DeleteFile"
 
     

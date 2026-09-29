@@ -142,6 +142,6 @@ function Analyze-Silence {
     
     Write-Host "=========  Silence output   $OutputCsv " 
 }
-    Write-Host "========= analyze silence    ======================================" -foregroundColor Blue
+    Write-Host "========= analyze silence   ===========================================" -foregroundColor Blue
     Write-Host "Input   =  $InputFile"
 Analyze-Silence -Fname $InputFile -LogName $OutputLog
