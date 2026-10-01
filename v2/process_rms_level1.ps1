@@ -1,6 +1,6 @@
-<# process RMS                                                          v2.0.3
+<# process RMS                                                          v2.1.0
 -------------------------------------------------------------------------------------
-    get RMS data points, analyse, mark delete sections                  #v0.0.3
+    get RMS data points, analyse, mark delete sections                 
 #>
 param(
     [string]$inputDir = 'F:\av\audio\downloads',
@@ -90,24 +90,25 @@ function analyzeRMS {
         [string]$OutputCsv
     )
     
-    $tsAvg=0
-    $tsMed=0.005 # Theil–Sen gradient Median
-    $tsMin=0
-    $tsMax=1
+#v3  $tsAvg=0
+#v3  $tsMed=0.005 # Theil–Sen gradient Median
+#v3  $tsMin=0
+#v3  $tsMax=1
     $spMin=0 # sound pressure mininum
-    
-    $TSWindow = [System.Collections.Generic.Queue[double]]::new()
+    $spAvg=0
+
+#v3 $TSWindow = [System.Collections.Generic.Queue[double]]::new()
     $spWindow = [System.Collections.Generic.Queue[double]]::new()
-    $TSAvW = [System.Collections.Generic.Queue[double]]::new()
+#v3 $TSAvW = [System.Collections.Generic.Queue[double]]::new()
     $category="commercial"
     $pdct1 = 1      # predict commercial is true=1   
-    $threshold=27   # if rms average of TSwindow is below threshold  v1=23
+#v3 $threshold=27   # if rms average of TSwindow is below threshold  v1=23
 
     $result = [System.Collections.Generic.List[object]]::new()
     $thisFrame = 0
     $pts = '0'
     $ptsTime = '0'
-    $rmsprev=0
+#v3 $rmsprev=0
 
     if ($debug){  # write-host "fName      $fName"
         write-host "reading =  $logName"
@@ -128,7 +129,7 @@ function analyzeRMS {
             if ($line -match "^lavfi.astats.Overall.RMS_level=(?<rms>[-\d\.]+)") {
                 $rmsText = $matches.rms
                 IF ($rmsText -ne "-"){ $rmsValue = [double]$rmsText }else {$rmsValue = 0.0}
-                $absRms = [math]::Abs($rmsValue)
+    #v3            $absRms = [math]::Abs($rmsValue)
     #v3            $diff=[double]($rmsprev - $rmsValue) # gradient is delta between two consecutive y points 
                 # $category = if ($absRms -lt $threshold) { 'loud' } else { 'quiet' }
                 
@@ -144,21 +145,21 @@ function analyzeRMS {
                     delete=$pdct1
                     cat = $category
                     delet2=[int]$pdct1
-                #   minute=[int]($ptsTime/60)
+                    minute=[int]($ptsTime/60)
     #v3             tsM1=$tsMin
     #v3             tsM2=$tsMax
                     spMin=$spMin
                     spAvg=$spAvg
                 })
-                $rmsprev=$rmsValue
+    #v3         $rmsprev=$rmsValue
                 
                  # IF dB window less than -mininum db threshold then speech
                 $spWindow.Enqueue($rmsValue)
                 if ($spWindow.Count -gt $windowSize) {
                     $null = $spWindow.Dequeue() 
                 }
-                $spMin = ($spWindow | Measure-Object -Minimum).Average
-                $spAvg = ($spWindow | Measure-Object -Average).Maximum
+                $spMin = ($spWindow | Measure-Object -Minimum).Maximum
+                $spAvg = ($spWindow | Measure-Object -Average).Average
                 # regression analysis of the gradient deltas
     #v3         $tsWindow.Enqueue([math]::Abs($diff))   # absolute values of the gradients
     #v3         if ($tsWindow.Count -gt $windowSize) {    $null = $tsWindow.Dequeue()    }
