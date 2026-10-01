@@ -1,8 +1,8 @@
-<# process main                                                          v1.0.0
+<# process main                                                          v2.0.0
 -------------------------------------------------------------------------------------
     get RMS data points, analyse, mark delete sections,
-    interpolate to ensure delete sections continuous
-    trim and delete
+    interpolate to ensure delete marks are continuous
+    trim and delete THEN export final result.
 #>
 param(
     [string]$InputDir = 'F:\av\audio\downloads',
@@ -121,7 +121,6 @@ foreach ($file in $mp3Files) {
     $rmsScript = Join-Path $scriptRoot 'process_rms_level1.ps1'
     $silenceScript = Join-Path $scriptRoot 'process_silence4.ps1'
     $inpScript = Join-Path $scriptRoot 'process_interpolate.ps1'
-    $prpScript = Join-Path $scriptRoot 'process_preppolate.ps1'
     # trim step will delete the sections identified and output a new completed mp3 file
     $deleteFile = Join-Path $InputDir "$baseName.RMS.csv"
     $trimScript = Join-Path $scriptRoot 'process_trim3.ps1'
@@ -145,19 +144,12 @@ foreach ($file in $mp3Files) {
     # & $silenceScript @allParams
     & $silenceScript -inputDir $InputDir -logPath $silenceLog -InputFile $file.FullName -OutputLog "$baseName.sil.log" -OutputCsv "$baseName.sil.csv"
     
-    # tag the loud  sections and
-    # 1 reduce pitch
-    # 2 amplify -6db
-
     
     # 3  interpolate 
     & $inpScript -inputdir $InputDir -logPath $analysisLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $deleteFile
 
-    # 4  prepolate #
-    # $prpScript -dd $InputDir -logPath $analysisLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $deleteFile
 
-
-    # 5 trim and delete
+    # 4 trim and delete AND re-EXPORT result.
     $trimOutput = Join-Path $OutputDir "$baseName.mp3"
     & $trimScript -dd $InputDir -logPath $analysisLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $trimOutput
 

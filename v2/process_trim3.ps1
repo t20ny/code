@@ -1,4 +1,4 @@
-<# trim and delete                                              v1.0.3
+<# trim and delete                                              v2.0.0
 -------------------------------------------------------------------------------------
 aselect will select audio sections we want to keep
     delete the sections as per the delete file
@@ -8,13 +8,20 @@ aselect will select audio sections we want to keep
 param (
     [string]$dd = 'F:\av\audio\downloads',
     [string]$logPath = '\logs',
-    [string]$InputFile = 'USSEL.mp3',
+    [string]$InputFile = 'Udies.mp3',
     [string]$DeleteFile = 'USSEL.RMS.csv', # analysed rms levels result that show the sections to be deleted
     [string]$OutputFile = 'USSEL2.mp3'
 )
-   
+<#
+$test="US IS BUYING RECORD VENEZUELAN CRUDE TO REPLACE LOST SUPPLY w Stephen Schork.20273"
+    [string]$InputFile = "$test.mp3"
+    [string]$DeleteFile = "$test.RMS.csv"
+    [string]$OutputFile = "$test.mp3"
+   $logPath="F:\av\audio\downloads\logs"
+#>
+
     Set-Location -LiteralPath $dd
-    $logname = Join-Path $logPath 'deleted.log'
+    $logname = Join-Path $logPath 'delete.log'
     $ErrorActionPreference = 'Continue'
     $startFrame = 0
     $deleteRanges = [System.Collections.Generic.List[string]]::new()
@@ -89,6 +96,17 @@ param (
     if ($outputDirectory) {
         $null = New-Item -ItemType Directory -Path $outputDirectory -Force
     }
+    $EQUALIZ="equalizer=f=8000:width_type=h:width=2000:g=-6"
+    $FILTER="$FILTER,$EQUALIZ"
+    $EQUALIZ="equalizer=f=10000:width_type=h:width=2000:g=-10"
+    $FILTER="$FILTER,$EQUALIZ"
+    $EQUALIZ="equalizer=f=15000:width_type=h:width=3000:g=-15"
+    $FILTER="$FILTER,$EQUALIZ"
+
+    #$NROMALISE="compand=.3|.3:1|1:-90/-60|-60/-40|-40/-30|-20/-20:6:0:-90:0.2"
+    #$FILTER="$FILTER,$NROMALISE"
+
+   # afreqshift
 
     $args7 = @(
         '-y',
@@ -116,6 +134,6 @@ param (
         throw "ffmpeg exited with code $LASTEXITCODE"
     }
 
-    Write-Host "Trim and delete log: $logName"
+    Write-Host "Trim  and  $logName"
 
 

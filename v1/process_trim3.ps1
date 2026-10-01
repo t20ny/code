@@ -90,6 +90,8 @@ param (
         $null = New-Item -ItemType Directory -Path $outputDirectory -Force
     }
 
+   # $NROMALISE="compand=.3|.3:1|1:-90/-60|-60/-40|-40/-30|-20/-20:6:0:-90:0.2"
+   # $FILTER="$FILTER,$NROMALISE"
     $args7 = @(
         '-y',
         '-hide_banner',
@@ -108,6 +110,11 @@ param (
     finally {
         $ErrorActionPreference = $prevErrorPreference
     }
+
+    # loudness norm
+    # https://ffmpeg-cookbook.com/en/articles/loudness-normalization/
+    # ffmpeg -i input.mp3 -af "loudnorm=I=-16:TP=-1.5:LRA=11" output.mp3
+    # ffmpeg -i input.mp3 -af "loudnorm=I=-16:TP=-1.5:LRA=11:measured_I=-27.06:measured_TP=-4.28:measured_LRA=7.20:measured_thresh=-37.06:linear=true" output.mp3
 
     if ($LASTEXITCODE -ne 0) {
         if ($LASTEXITCODE -eq -22) {

@@ -1,14 +1,15 @@
-<# process RMS                                                          v1.0.0
+<# process RMS                                                          v2.0.3
 -------------------------------------------------------------------------------------
-    get RMS data points, analyse, mark delete sections
+    get RMS data points, analyse, mark delete sections                  #v0.0.3
 #>
 param(
     [string]$inputDir = 'F:\av\audio\downloads',
     [string]$OutputDir = 'F:\av\audio\done',
     [string]$logPath = 'logs',    
-    [string]$InputFile = 'THE609.mp3',
+    [string]$InputFile = 'THE608.mp3', #  'THE608.mp3', #
     [string]$OutputCsv = 'rms.csv'
 )
+# rm "F:\av\audio\downloads\logs\THE608.rms.log"
 $debug=1
 [int]$attemps=1
 Set-StrictMode -Version Latest
@@ -24,7 +25,6 @@ $windowSize=240  # Theil–Sen regression window 38 frames per second so v2=240 
 $speechLvl=-60   # if rms level below Lvl then this window is speech   v3=-50
 $windowSize=160  # Theil–Sen regression window 38 frames per second so v3=120 about 3 seconds
 
-
 function getRMS {
     param(
         [string]$fName,
@@ -32,13 +32,24 @@ function getRMS {
     )
     write-host "fName   =  $fName"
     # write-host "get RMS $logName"
-   
-    # 1 second points
-    #$filter = "astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level"
+   # FILTER REF https://ffmpeg.org/ffmpeg-filters.html#Filtergraph-syntax-1
+   # https://ffmpeg-cookbook.com/en/articles/astats/
+   # a
+   $a0= 'ffmpeg -i input.mp4 -af "astats=measure_perchannel=RMS_level+Peak_level:measure_overall=RMS_level+Peak_level" -f null /dev/null'
+   #  with metadata=1, astats attaches its statistics to every audio frame as metadata. Each value covers the audio from the start up to that frame;
+   #  use reset to get values for shorter intervals. The ametadata filter prints the values:
+   $a1='ffmpeg -i input.mp4 -af "astats=metadata=1,ametadata=print:file=-" -f null /dev/null 2>&1 | head -50'
+   # Segment-by-Segment Statistics (reset Parameter)
+   $a2='ffmpeg -i input.mp4 -af "asetnsamples=n=44100,astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level:file=-" -f null /dev/null'
 
-    # 2 second points
+
+
+    # 2 
    #$filter = "astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level"
-    $FILTER= "astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level:file=$logName" #  verbose file output
+   $FILTER= "astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level:file=$logName" #  verbose file output
+   #$FILTER= "astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level+RMS_difference+Mean_difference" 
+
+
 
     $args4 = @(
         '-hide_banner',
@@ -53,7 +64,8 @@ function getRMS {
     try {
         # & ffmpeg @args4                        ## echos result on Terminal.
         # & ffmpeg @args4  | Out-Null              ## out-null  
-        & ffmpeg @args4  2> "RMSerrors.log"         ## log error supresses Terminal   
+        #           & ffmpeg @args4  2> "RMSerrors.log"         ## log error supresses Terminal   
+        $ffResult = & ffmpeg @args4 2>$null
     }
     finally {
         $ErrorActionPreference = $prevErrorPreference
@@ -66,7 +78,7 @@ function getRMS {
         throw "ffmpeg exited with code $LASTEXITCODE"
     }
 
-    Write-Host "RMS log =  $logName"
+    Write-Host "RMS result =   $ffResult"
 
 }
 
@@ -117,7 +129,7 @@ function analyzeRMS {
                 $rmsText = $matches.rms
                 IF ($rmsText -ne "-"){ $rmsValue = [double]$rmsText }else {$rmsValue = 0.0}
                 $absRms = [math]::Abs($rmsValue)
-                $diff=[double]($rmsprev - $rmsValue) # gradient is delta between two consecutive y points 
+    #v3            $diff=[double]($rmsprev - $rmsValue) # gradient is delta between two consecutive y points 
                 # $category = if ($absRms -lt $threshold) { 'loud' } else { 'quiet' }
                 
                 $result.Add([PSCustomObject]@{
@@ -125,17 +137,18 @@ function analyzeRMS {
                     pts = $pts
                     pts_time = $ptsTime
                     RMS = $rmsText
-                    rmsa = $absRms
-                    dif= $diff
-                    tsA=$tsAvg
-                    tsM=$tsMed
+    #v3                rmsa = $absRms
+    #v3                dif= $diff
+    #v3                tsA=$tsAvg
+   #v3                 tsM=$tsMed
                     delete=$pdct1
                     cat = $category
                     delet2=[int]$pdct1
-                    minute=[int]($ptsTime/60)
-                    tsM1=$tsMin
-                    tsM2=$tsMax
+                #   minute=[int]($ptsTime/60)
+    #v3             tsM1=$tsMin
+    #v3             tsM2=$tsMax
                     spMin=$spMin
+                    spAvg=$spAvg
                 })
                 $rmsprev=$rmsValue
                 
@@ -144,25 +157,24 @@ function analyzeRMS {
                 if ($spWindow.Count -gt $windowSize) {
                     $null = $spWindow.Dequeue() 
                 }
-                $spMin = ($spWindow | Measure-Object -Minimum).Minimum
-             
+                $spMin = ($spWindow | Measure-Object -Minimum).Average
+                $spAvg = ($spWindow | Measure-Object -Average).Maximum
                 # regression analysis of the gradient deltas
-                $tsWindow.Enqueue([math]::Abs($diff))   # absolute values of the gradients
-                if ($tsWindow.Count -gt $windowSize) {
-                    $null = $tsWindow.Dequeue() 
-                }
-                $tsAvg = ($tsWindow | Measure-Object -Average).Average
-                $tsMin = ($TSWindow | Measure-Object -Minimum).Minimum
-                $tsMax = ($TSWindow | Measure-Object -Maximum).Maximum
-                $tsMed = ([double]$tsMin + [double]$tsMax)/2
+    #v3         $tsWindow.Enqueue([math]::Abs($diff))   # absolute values of the gradients
+    #v3         if ($tsWindow.Count -gt $windowSize) {    $null = $tsWindow.Dequeue()    }
+    #v3         $tsAvg = ($tsWindow | Measure-Object -Average).Average
+    #v3         $tsMin = ($TSWindow | Measure-Object -Minimum).Minimum
+    #v3         $tsMax = ($TSWindow | Measure-Object -Maximum).Maximum
+    #v3         $tsMed = ([double]$tsMin + [double]$tsMax)/2
      
                 # prediction 1
                 $pdct1 = if ($spMin -lt $speechLvl) { 0 } 
-                     elseif ($tsAvg -gt 6) { 0 } 
+    #v3            elseif ($tsAvg -gt 6) { 0 } 
                     else { 1 }
              
                 $category = if ($spMin -lt $speechLvl) { "speechSp" } 
-                        elseif ($tsMed -gt 10) {  "SpeechMed" }
+    #v3                 elseif ($tsAvg -gt 6) { "speechAvg  " } 
+    #v3                 elseif ($tsMed -gt 10) {  "SpeechMed" }
                         else { "comElse" }
            
             }
