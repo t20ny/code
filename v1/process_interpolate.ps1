@@ -150,9 +150,9 @@ param (
 
     # replace the output file with new interpolated version
     if (Test-Path $dest) {
-        Write-Host "remove  =  $dest"
+        # Write-Host "remove  =  $dest"
         Remove-Item $dest -Force
     }
 
     $data | Export-Csv -LiteralPath $dest -NoTypeInformation
-    Write-Host "ipol out=  $dest"
+    Write-Host "ipolated=  $dest"

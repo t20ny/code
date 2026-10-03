@@ -1,4 +1,4 @@
-<# interpolate the delete markers                                             v0.1.1
+<# interpolate the delete markers                                             v0.1.2
 -------------------------------------------------------------------------------------
     interpolate to ensure delete sections of 0-values in the rms1.csv file are continuous
     short gaps between delete sections (1) are filled so delete sections stay continuous
@@ -15,15 +15,16 @@ param (
     [string]$logPath = '\',
     [string]$InputFile = 'TH609.mp3',
     [string]$OutputCsv = 'rms.csv',
-    [string]$DeleteFile = 'RMS1.csv', # analysed rms levels result that show the sections to be deleted
+    [string]$DeleteFile = 'RMS.csv', # analysed rms levels result that show the sections to be deleted
     [string]$OutputFile = 'RMS5.csv' # final output
 )
    
     $framesPerSecond = 38
     $minGap       = $framesPerSecond * 6
-    $preDeleteRun = $framesPerSecond * 3
+    $preDeleteRun = $framesPerSecond * 4
     $minDeleteRun = $framesPerSecond * 20
-    $endsDelete   = $framesPerSecond * 6
+    $startDelete   = $framesPerSecond * 12
+    $endDelete   = $framesPerSecond * 6
     
     $sourceCandidates = @(
         $DeleteFile,
@@ -47,7 +48,7 @@ param (
     if ($data.Count -eq 0) {
         throw "No rows found in: $source"
     }
-
+    # step 1
     # read the values in the data file as a PSobject table
     foreach ($row in $data) {
         # step 1        
@@ -66,9 +67,17 @@ param (
         }
     }
     
+    # step 1.5
+    # start of the file are marked as delete section
+    $strtSectionLength = [Math]::Min($startDelete, $data.Count)
+    for ($index = 0; $index -lt $strtSectionLength; $index++) {
+        $data[$index].delete = 1
+        $data[$index].cat = "ip1start"
+    }
+
     # step 2
     # pad preDelete to leading edge of the delete sections
-    for ($index = 0; $index -lt $data.Count;) {
+    for ($index =  $strtSectionLength; $index -lt $data.Count;) {
         if ([int]$data[$index].delete -ne 1) {
             $index++
             continue
@@ -82,11 +91,12 @@ param (
         $padStart = [Math]::Max(0, $runStart - $preDeleteRun)
         for ($padIndex = $padStart; $padIndex -lt $runStart; $padIndex++) {
             $data[$padIndex].delete = 1
+            $data[$padIndex].cat = "ip2prePad"
         }
     }
     # step 3
     # Remove short false-positive delete runs before filling speech gaps.
-    for ($index = 0; $index -lt $data.Count;) {
+    for ($index = $strtSectionLength; $index -lt $data.Count;) {
         if ([int]$data[$index].delete -eq 0) {
             $index++
             continue
@@ -100,6 +110,7 @@ param (
         if (($index - $runStart) -lt $minDeleteRun) {
             for ($runIndex = $runStart; $runIndex -lt $index; $runIndex++) {
                 $data[$runIndex].delete = 0
+                $data[$runindex].cat = "ip3run"
             }
         }
     }
@@ -122,17 +133,16 @@ param (
         if ($hasDeleteBefore -and $hasDeleteAfter -and $gapLength -lt $minGap) {
             for ($gapIndex = $gapStart; $gapIndex -lt $index; $gapIndex++) {
                 $data[$gapIndex].delete = 1
+                $data[$gapindex].cat = "ip4gap"
             }
         }
     }
     # step 5
-    # Both ends of the file are padded as delete sections (1)
-    $endSectionLength = [Math]::Min($endsDelete, $data.Count)
-    for ($index = 0; $index -lt $endSectionLength; $index++) {
-        $data[$index].delete = 1
-    }
+    # end of the file are marked as delete section
+    $endSectionLength = [Math]::Min($endDelete, $data.Count)
     for ($index = $data.Count - $endSectionLength; $index -lt $data.Count; $index++) {
         $data[$index].delete = 1
+        $data[$index].cat = "ip5end"
     }
     # step 6
     # save output
@@ -150,9 +160,9 @@ param (
 
     # replace the output file with new interpolated version
     if (Test-Path $dest) {
-        Write-Host "remove  =  $dest"
+       # Write-Host "remove  =  $dest"
         Remove-Item $dest -Force
     }
 
     $data | Export-Csv -LiteralPath $dest -NoTypeInformation
-    Write-Host "ipol out=  $dest"
+    Write-Host "ipolated=  $dest"

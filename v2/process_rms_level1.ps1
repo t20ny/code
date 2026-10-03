@@ -35,12 +35,12 @@ function getRMS {
    # FILTER REF https://ffmpeg.org/ffmpeg-filters.html#Filtergraph-syntax-1
    # https://ffmpeg-cookbook.com/en/articles/astats/
    # a
-   $a0= 'ffmpeg -i input.mp4 -af "astats=measure_perchannel=RMS_level+Peak_level:measure_overall=RMS_level+Peak_level" -f null /dev/null'
+  # $a0= 'ffmpeg -i input.mp4 -af "astats=measure_perchannel=RMS_level+Peak_level:measure_overall=RMS_level+Peak_level" -f null /dev/null'
    #  with metadata=1, astats attaches its statistics to every audio frame as metadata. Each value covers the audio from the start up to that frame;
    #  use reset to get values for shorter intervals. The ametadata filter prints the values:
-   $a1='ffmpeg -i input.mp4 -af "astats=metadata=1,ametadata=print:file=-" -f null /dev/null 2>&1 | head -50'
+  # $a1='ffmpeg -i input.mp4 -af "astats=metadata=1,ametadata=print:file=-" -f null /dev/null 2>&1 | head -50'
    # Segment-by-Segment Statistics (reset Parameter)
-   $a2='ffmpeg -i input.mp4 -af "asetnsamples=n=44100,astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level:file=-" -f null /dev/null'
+   #$a2='ffmpeg -i input.mp4 -af "asetnsamples=n=44100,astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level:file=-" -f null /dev/null'
 
 
 
@@ -128,8 +128,12 @@ function analyzeRMS {
             # y axis
             if ($line -match "^lavfi.astats.Overall.RMS_level=(?<rms>[-\d\.]+)") {
                 $rmsText = $matches.rms
-                IF ($rmsText -ne "-"){ $rmsValue = [double]$rmsText }else {$rmsValue = 0.0}
-    #v3            $absRms = [math]::Abs($rmsValue)
+                IF ($rmsText -ne "-"){ 
+                    $rmsValue = [double]$rmsText 
+                }else {
+                    $rmsValue = 0.0
+                    }
+               $absRms = [math]::Abs($rmsValue)
     #v3            $diff=[double]($rmsprev - $rmsValue) # gradient is delta between two consecutive y points 
                 # $category = if ($absRms -lt $threshold) { 'loud' } else { 'quiet' }
                 
@@ -138,7 +142,7 @@ function analyzeRMS {
                     pts = $pts
                     pts_time = $ptsTime
                     RMS = $rmsText
-    #v3                rmsa = $absRms
+                   rmsa = $absRms
     #v3                dif= $diff
     #v3                tsA=$tsAvg
    #v3                 tsM=$tsMed
@@ -158,7 +162,7 @@ function analyzeRMS {
                 if ($spWindow.Count -gt $windowSize) {
                     $null = $spWindow.Dequeue() 
                 }
-                $spMin = ($spWindow | Measure-Object -Minimum).Maximum
+                $spMin = ($spWindow | Measure-Object -Minimum).Minimum
                 $spAvg = ($spWindow | Measure-Object -Average).Average
                 # regression analysis of the gradient deltas
     #v3         $tsWindow.Enqueue([math]::Abs($diff))   # absolute values of the gradients
@@ -170,12 +174,11 @@ function analyzeRMS {
      
                 # prediction 1
                 $pdct1 = if ($spMin -lt $speechLvl) { 0 } 
-    #v3            elseif ($tsAvg -gt 6) { 0 } 
-                    else { 1 }
+                     elseif ($spAvg -lt $speechLvl) { 0 } 
+                       else { 1 }
              
                 $category = if ($spMin -lt $speechLvl) { "speechSp" } 
-    #v3                 elseif ($tsAvg -gt 6) { "speechAvg  " } 
-    #v3                 elseif ($tsMed -gt 10) {  "SpeechMed" }
+                        elseif ($spAvg -lt $speechLvl) { "speechAvg" } 
                         else { "comElse" }
            
             }
@@ -283,7 +286,7 @@ Write-Host "========= analyze RMS       ========================================
 Push-Location -LiteralPath $logDirectory
 try {
   if (test-path $logFileName){
-    Write-Host "[1]====== Use the existing RMS file  $logFileName " -foregroundcolor yellow
+    Write-Host "[1]====== Use the existing RMS log  $logFileName " -foregroundcolor yellow
   }
   else {
     Write-Host "[1]====== get RMS  "
