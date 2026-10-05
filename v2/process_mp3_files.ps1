@@ -21,12 +21,12 @@ $ErrorActionPreference = 'Stop'
 $dts = (Get-Date).ToString('yyyyMMdd.HHmmss')
 $ymd = (Get-Date).ToString('yyyyMMdd')
 $script:LogDirectory = Join-Path $InputDir 'logs'
-$script:DailyLogPath = Join-Path $script:LogDirectory "$ymd.txt"
+$script:DailyLogFile = Join-Path $script:LogDirectory "$ymd.txt"
 
 function Write-Log {
     param([string]$Message)
     $stamp = (Get-Date).ToString('HH:mm:ss')
-    $targetLog = if ($script:LogDirectory) { Join-Path $script:LogDirectory "$ymd.txt" } else { $script:DailyLogPath }
+    $targetLog = if ($script:LogDirectory) { Join-Path $script:LogDirectory "$ymd.txt" } else { $script:DailyLogFile }
     $null = New-Item -Path (Split-Path -Path $targetLog -Parent) -ItemType Directory -Force
     Add-Content -Path $targetLog -Value "[$stamp] $Message"
 }
@@ -62,7 +62,7 @@ $null = New-Item -Path $OutputDir -ItemType Directory -Force
 $logDir = Join-Path $OutputDir 'logs'
 $null = New-Item -Path $logDir -ItemType Directory -Force
 $script:LogDirectory = $logDir
-$script:DailyLogPath = Join-Path $script:LogDirectory "$ymd.txt"
+$script:DailyLogFile = Join-Path $script:LogDirectory "$ymd.txt"
 
 if ($fileArray.Count -gt 0) {
     $mp3Files = @(
@@ -118,7 +118,7 @@ foreach ($file in $mp3Files) {
     write-host "$probeResult seconds  $($probeResult/60) minutes" 
 
     # rms step will create rms.csv file of data to pass to the trim step
-    $analysisLogDir = Join-Path $OutputDir 'logs'
+    $outLogDir = Join-Path $OutputDir 'logs'
     $rmsScript = Join-Path $scriptRoot 'process_rms_level1.ps1'
     $silenceScript = Join-Path $scriptRoot 'process_silence4.ps1'
     $inpScript = Join-Path $scriptRoot 'process_interpolate.ps1'
@@ -130,16 +130,20 @@ foreach ($file in $mp3Files) {
 
     $allParams = @{
         inputDir  = $InputDir
-        logPath   = $analysisLogDir
+        logPath   = $outLogDir
         InputFile = $file.FullName
         OutputCsv = "$baseName.csv"
         OutputLog = "$baseName.sil.log"
         DeleteFile = $deleteFile
+
+        #-inputDir $InputDir -logPath $silenceLog -InputFile $file.FullName -OutputLog "$baseName.sil.log" -OutputCsv "$baseName.sil.csv"
+
+
     }
     
     # 1 RMS
     & $rmsScript @allParams
-    # & $rmsScript -inputDir $InputDir -logPath $analysisLogDir -InputFile $file.FullName -OutputCsv "$baseName.csv"
+    # & $rmsScript -inputDir $InputDir -logPath $outLogDir -InputFile $file.FullName -OutputCsv "$baseName.csv"
 
    
     # 2 process silence 
@@ -148,16 +152,16 @@ foreach ($file in $mp3Files) {
     
     
     # 3  interpolate 
-    & $inpScript -inputdir $InputDir -logPath $analysisLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $deleteFile
+    & $inpScript -inputdir $InputDir -logPath $outLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $deleteFile
 
 
     # 4  spectrum alternate processing option
-    & $spectrum01 -inputpath $inputDir -logPath "$outputDir\Logs" -InputFile $file.FullName -rmsFile "$baseName.csv" -SilenceFile "$baseName.sil.csv" -OutputPath $OutputDir -OutputFile "new.mp3" -dd $dd
+    & $spectrum01 -inputpath $inputDir -logPath "$outputDir\Logs" -InputFile $file.FullName -rmsFile "rms.csv" -SilenceFile "sil.csv" -OutputPath $OutputDir -OutputFile "new.mp3" -dd $dd
 
 
     # 5 trim and delete AND re-EXPORT result.
     $trimOutput = Join-Path $OutputDir "$baseName.mp3"
-    & $trimScript -dd $InputDir -logPath $analysisLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $trimOutput
+    & $trimScript -dd $InputDir -logPath $outLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $trimOutput
 
 }
 

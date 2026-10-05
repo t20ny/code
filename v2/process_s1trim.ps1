@@ -8,9 +8,9 @@ aselect will select audio sections we want to keep
 param (
     [string]$dd = 'F:\av\audio\downloads',
     [string]$logPath = '\logs',
-    [string]$InputFile = 'Udies.mp3',
-    [string]$DeleteFile = 'USSEL.RMS.csv', # analysed rms levels result that show the sections to be deleted
-    [string]$OutputFile = 'USSEL2.mp3'
+    [string]$InputFile = 'source.mp3',
+    [string]$DeleteFile = 'sil.csv', # analysed silence result that show the sections to be deleted
+    [string]$OutputFile = 'new.mp3'
 )
 
 

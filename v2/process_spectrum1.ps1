@@ -33,8 +33,8 @@ param (
     if (-not (Test-Path -LiteralPath $inputPath -PathType Leaf)) {
         throw "Input file not found: $inputPath"
     }
-    if (-not (Test-Path -LiteralPath "$OutputPath\$RmsFile" -PathType Leaf)) {
-        throw "RMS CSV not found: $OutputPath\$RmsFile"
+    if (-not (Test-Path -LiteralPath "$LogPath\$RmsFile" -PathType Leaf)) {
+        throw "RMS CSV not found: $LogPath\$RmsFile"
     }
     
    
@@ -43,17 +43,81 @@ param (
          Write-Host "========= load rms   =============================================" -ForegroundColor Blue
         write-host "reading =  $RmsFile"
         # import the csv data file with first row headers
-        $data1 = Import-Csv -Path "$LogPath\$RmsFile" -Delimiter ","
+        $data1 = @(Import-Csv -Path "$LogPath\$RmsFile" -Delimiter ",")
 
-        Write-Host "========= load silence   ==========        ===================================" -ForegroundColor Blue
+        Write-Host "========= load silence   =============================================" -ForegroundColor Blue
         write-host "reading =  $silenceFile"
         # import the csv data file with first row headers
-        $data2 = Import-Csv -Path "$LogPath\$SilenceFile" -Delimiter ","
+        $data2 = @(Import-Csv -Path "$LogPath\$SilenceFile" -Delimiter ",")
 
-        # merge data1 and data2 with all columns aligned
-        $data = $data1 + $data2
+        # Join by frame while keeping fields from both CSVs.
+        if ($data1.Count -eq 0) {
+            throw "No RMS rows found in: $LogPath\$RmsFile"
+        }
+        $rmsColumns = @($data1[0].PSObject.Properties.Name)
+        $silenceColumnMap = @{}
+        foreach ($column in $data2[0].PSObject.Properties.Name) {
+            if ($column -in @('Frame', 'pts', 'pts_time') -or $column -notin $rmsColumns) {
+                $silenceColumnMap[$column] = $column
+            }
+            else {
+                $silenceColumnMap[$column] = "sil_$column"
+            }
+        }
+
+        $silenceByFrame = @{}
+        foreach ($row in $data2) {
+            $silenceByFrame[[string]$row.Frame] = $row
+        }
+
+        $outputColumns = [System.Collections.Generic.List[string]]::new()
+        foreach ($column in $rmsColumns) {
+            $outputColumns.Add($column)
+        }
+        foreach ($column in $silenceColumnMap.Values) {
+            if ($column -notin $outputColumns) {
+                $outputColumns.Add($column)
+            }
+        }
+
+        $mergedRows = [System.Collections.Generic.List[object]]::new()
+        $matchedFrames = @{}
+        foreach ($rmsRow in $data1) {
+            $frameKey = [string]$rmsRow.Frame
+            $mergedValues = [ordered]@{}
+            foreach ($column in $outputColumns) {
+                $mergedValues[$column] = $null
+            }
+            foreach ($property in $rmsRow.PSObject.Properties) {
+                $mergedValues[$property.Name] = $property.Value
+            }
+            if ($silenceByFrame.ContainsKey($frameKey)) {
+                foreach ($property in $silenceByFrame[$frameKey].PSObject.Properties) {
+                    $mergedValues[$silenceColumnMap[$property.Name]] = $property.Value
+                }
+                $matchedFrames[$frameKey] = $true
+            }
+            $mergedRows.Add([pscustomobject]$mergedValues)
+        }
+
+        foreach ($silenceRow in $data2) {
+            $frameKey = [string]$silenceRow.Frame
+            if ($matchedFrames.ContainsKey($frameKey)) {
+                continue
+            }
+            $mergedValues = [ordered]@{}
+            foreach ($column in $outputColumns) {
+                $mergedValues[$column] = $null
+            }
+            foreach ($property in $silenceRow.PSObject.Properties) {
+                $mergedValues[$silenceColumnMap[$property.Name]] = $property.Value
+            }
+            $mergedRows.Add([pscustomobject]$mergedValues)
+        }
+
+        $data = $mergedRows | Sort-Object { [long]$_.Frame }
         $data | Export-Csv -Path "$LogPath\Spectrum.csv"
-
+    <#
         # iterate each row and find the start frame of sections to be deleted
         foreach ($line in $data) {
             $thisFrame=$line.Frame
@@ -117,11 +181,11 @@ param (
         '-c:a', 'libmp3lame',
         '-q:a', '4',
         $outputPath
-    )
-
+        )
+    #>
         $prevErrorPreference = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
-        Write-Host "========= trim and delete   =============================================" -ForegroundColor Blue
+        Write-Host "========= spectrum trim   =============================================" -ForegroundColor Blue
         & ffmpeg @args7   2> "$logName" | Out-Null
     }
     finally {
@@ -135,6 +199,6 @@ param (
         throw "ffmpeg exited with code $LASTEXITCODE"
     }
 
-    Write-Host "Trim  and  $logName"
+    Write-Host "Spec Log   $logName"
 
 

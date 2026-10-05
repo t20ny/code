@@ -3,8 +3,8 @@
 #>
 param(
     [string]$InputDir="F:\av\audio\downloads",
-    [string]$logPath= '\logs',    
     [string]$InputFile="EUE.mp3",
+    [string]$logPath= '\logs',    
     [string]$OutputLog="silence.log",
     [string]$OutputCsv = "EUE.csv"
 )
@@ -13,25 +13,24 @@ Set-Location $InputDir
 #& $silenceScript -dd $InputDir -logPath $silenceLog -InputFile $file.FullName -OutputLog "$baseName.sil.log"
 
 # analyze the MP3 audio file
-$prevErrorPreference = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
 [double]$MinSilenceSeconds = 0.35
 [string]$Threshold = '-35dB'
 $ymd = (Get-Date).ToString('yyyyMMdd')
 $script:LogDirectory = Join-Path $InputDir 'logs'
-$script:DailyLogPath = Join-Path $script:LogDirectory "$ymd.txt"
+$script:DailyLogFile = Join-Path $script:LogDirectory "$ymd.txt"
 
 
 
 function Write-Log {
     param([string]$Message)
     $stamp = (Get-Date).ToString('HH:mm:ss')
-    $targetLog = if ($script:LogDirectory) { Join-Path $script:LogDirectory "$ymd.txt" } else { $script:DailyLogPath }
+    $targetLog = if ($script:LogDirectory) { Join-Path $script:LogDirectory "$ymd.txt" } else { $script:DailyLogFile }
     $null = New-Item -Path (Split-Path -Path $targetLog -Parent) -ItemType Directory -Force
     Add-Content -Path $targetLog -Value "[$stamp] $Message"
 }
 
-function Analyze-Silence {
+function AnalyzeSilence {
     param([string]$fName, [string]$logName)
 
     $filterLogPath = ($logName -replace '\\', '/') -replace ':', '\:'
@@ -144,4 +143,4 @@ function Analyze-Silence {
 }
     Write-Host "========= analyze silence   ===========================================" -foregroundColor Blue
     Write-Host "Input   =  $InputFile"
-Analyze-Silence -Fname $InputFile -LogName $OutputLog
+AnalyzeSilence -Fname $InputFile -LogName $OutputLog
