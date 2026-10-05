@@ -7,7 +7,7 @@
 param(
     [string]$InputDir = 'F:\av\audio\downloads',
     [string]$OutputDir = 'F:\av\audio\done',
-
+    [string]$dd = 'F:\av\audio\downloads',
     [string[]]$fileArray = @(),
 
     [switch]$Latest 
@@ -98,6 +98,7 @@ foreach ($file in $mp3Files) {
     #$auditLog = Join-Path $logDir ("{0}.log" -f $baseName)
 
     Write-Log "Inspecting: $($file.FullName)"
+    Copy-Item ($file.FullName) -Destination "$dd\source.mp3" -force # download for spectrum process
 
     $probeArgs = @('-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', $file.FullName)
     $prevErrorPreference = $ErrorActionPreference
@@ -124,6 +125,7 @@ foreach ($file in $mp3Files) {
     # trim step will delete the sections identified and output a new completed mp3 file
     $deleteFile = Join-Path $InputDir "$baseName.RMS.csv"
     $trimScript = Join-Path $scriptRoot 'process_trim3.ps1'
+    $spectrum01 = Join-Path $scriptRoot 'process_spectrum1.ps1'
     
 
     $allParams = @{
@@ -149,7 +151,11 @@ foreach ($file in $mp3Files) {
     & $inpScript -inputdir $InputDir -logPath $analysisLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $deleteFile
 
 
-    # 4 trim and delete AND re-EXPORT result.
+    # 4  spectrum alternate processing option
+    & $spectrum01 -inputpath $inputDir -logPath "$outputDir\Logs" -InputFile $file.FullName -rmsFile "$baseName.csv" -SilenceFile "$baseName.sil.csv" -OutputPath $OutputDir -OutputFile "new.mp3" -dd $dd
+
+
+    # 5 trim and delete AND re-EXPORT result.
     $trimOutput = Join-Path $OutputDir "$baseName.mp3"
     & $trimScript -dd $InputDir -logPath $analysisLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $trimOutput
 

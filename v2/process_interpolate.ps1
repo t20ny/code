@@ -12,7 +12,7 @@
 param (
     [string]$inputDir = 'F:\av\audio\done',
     [string]$OutputDir = 'F:\av\audio\done',
-    [string]$logPath = '\',
+    [string]$logPath = 'logs',
     [string]$InputFile = 'TH609.mp3',
     [string]$OutputCsv = 'rms.csv',
     [string]$DeleteFile = 'RMS.csv', # analysed rms levels result that show the sections to be deleted
@@ -20,11 +20,12 @@ param (
 )
    
     $framesPerSecond = 38
-    $minGap       = $framesPerSecond * 6
-    $preDeleteRun = $framesPerSecond * 4
-    $minDeleteRun = $framesPerSecond * 20
-    $startDelete   = $framesPerSecond * 12
-    $endDelete   = $framesPerSecond * 6
+    $minGap       = $framesPerSecond * 6    # if two delete sections 6 seconds mininum apart then fill this gap (with 1 marks)
+    $minDelete    = $framesPerSecond * 3    # if delete section 3 seconds mininum then assume its not valid (flatten with 0 marks)
+    $preDeleteRun = $framesPerSecond * 4    # if valid delete section the pad up to 4 seconds before it.
+    $minDeleteRun = $framesPerSecond * 10   # if valid delete seciton limit 10 seconds of additional delete padding to next section
+    $startDelete   = $framesPerSecond * 15  # first 15 seconds of the file should be marked as delete
+    $endDelete   = $framesPerSecond * 6     # end 6 seconds of the file shoudl be marked as deletes
     
     $sourceCandidates = @(
         $DeleteFile,
@@ -77,6 +78,7 @@ param (
 
     # step 2
     # pad preDelete to leading edge of the delete sections
+    $prepadEnd=$strtSectionLength
     for ($index =  $strtSectionLength; $index -lt $data.Count;) {
         if ([int]$data[$index].delete -ne 1) {
             $index++
@@ -92,11 +94,13 @@ param (
         for ($padIndex = $padStart; $padIndex -lt $runStart; $padIndex++) {
             $data[$padIndex].delete = 1
             $data[$padIndex].cat = "ip2prePad"
+            $prepadEnd=$padIndex
         }
     }
     # step 3
-    # Remove short false-positive delete runs before filling speech gaps.
-    for ($index = $strtSectionLength; $index -lt $data.Count;) {
+    # Remove short (not valid)) delete runs before filling speech gaps.
+    $runEnded=$padStart
+    for ($index = $prepadEnd; $index -lt $data.Count;) {
         if ([int]$data[$index].delete -eq 0) {
             $index++
             continue
@@ -106,17 +110,20 @@ param (
         while ($index -lt $data.Count -and [int]$data[$index].delete -eq 1) {
             $index++
         }
-
-        if (($index - $runStart) -lt $minDeleteRun) {
-            for ($runIndex = $runStart; $runIndex -lt $index; $runIndex++) {
-                $data[$runIndex].delete = 0
-                $data[$runindex].cat = "ip3run"
+        
+        if ($index -gt 2000){ # dont apply too early in the file
+            if (($index - $runStart) -lt $minDelete) {
+                for ($runIndex = $runStart; $runIndex -lt $index; $runIndex++) {
+                    $data[$runIndex].delete = 0
+                    $data[$runindex].cat = "ip3run"
+                    $runEnded=$runindex
+                }
             }
         }
     }
     # step 4
     # Fill short speech gaps only when they are bounded by retained delete runs.
-    for ($index = 0; $index -lt $data.Count;) {
+    for ($index = $runEnded; $index -lt $data.Count;) {
         if ([int]$data[$index].delete -eq 1) {
             $index++
             continue

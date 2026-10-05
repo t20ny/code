@@ -96,6 +96,8 @@ $test="US IS BUYING RECORD VENEZUELAN CRUDE TO REPLACE LOST SUPPLY w Stephen Sch
     if ($outputDirectory) {
         $null = New-Item -ItemType Directory -Path $outputDirectory -Force
     }
+    $EQUALIZ="equalizer=f=6000:width_type=h:width=2000:g=-6"
+    $FILTER="$FILTER,$EQUALIZ"
     $EQUALIZ="equalizer=f=8000:width_type=h:width=2000:g=-6"
     $FILTER="$FILTER,$EQUALIZ"
     $EQUALIZ="equalizer=f=10000:width_type=h:width=2000:g=-10"

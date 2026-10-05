@@ -77,9 +77,9 @@ function getRMS {
         }
         throw "ffmpeg exited with code $LASTEXITCODE"
     }
-
-    Write-Host "RMS result =   $ffResult"
-
+    if ($ffResult){
+        Write-Host "ff result=  $ffResult"
+    }
 }
 
 
