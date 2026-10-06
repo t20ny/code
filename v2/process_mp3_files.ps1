@@ -6,10 +6,9 @@
 #>
 param(
     [string]$InputDir = 'F:\av\audio\downloads',
-    [string]$OutputDir = 'F:\av\audio\done',
     [string]$dd = 'F:\av\audio\downloads',
+    [string]$OutputDir = 'F:\av\audio\done',
     [string[]]$fileArray = @(),
-
     [switch]$Latest 
 )
 $scriptRoot = $PSScriptRoot
@@ -37,8 +36,8 @@ function Get-Mp3Files {
         [switch]$NewestOnly
     )
 
-    $files = @(Get-ChildItem -Path $Directory -File -Filter '*.mp3' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime)
-
+    $files = @(Get-ChildItem -Path $Directory -File -Filter '*.mp3' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime )
+    
     if ($NewestOnly) {
         if ($files.Count -eq 0) { return @() }
         return @($files | Select-Object -Last 1)
@@ -94,12 +93,13 @@ if ($mp3Files.Count -eq 0) {
 foreach ($file in $mp3Files) {
     $baseName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
    # $outputFile = Join-Path $OutputDir ("{0}_cleaned.mp3" -f $baseName)
-    $silenceLog = Join-Path $logDir ("{0}_silence.log" -f $baseName)
+    #$silenceLog = Join-Path $logDir ("{0}_silence.log" -f $baseName)
     #$auditLog = Join-Path $logDir ("{0}.log" -f $baseName)
 
     Write-Log "Inspecting: $($file.FullName)"
-    Copy-Item ($file.FullName) -Destination "$dd\source.mp3" -force # download for spectrum process
-
+    if ($file.Name -notmatch "source.mp3"){ 
+        Copy-Item ($file.FullName) -Destination "$dd\source.mp3" -force # download for spectrum process
+    }
     $probeArgs = @('-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', $file.FullName)
     $prevErrorPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
@@ -133,12 +133,11 @@ foreach ($file in $mp3Files) {
         logPath   = $outLogDir
         InputFile = $file.FullName
         OutputCsv = "$baseName.csv"
-        OutputLog = "$baseName.sil.log"
+        OutputLog = "$baseName.log"
         DeleteFile = $deleteFile
-
-        #-inputDir $InputDir -logPath $silenceLog -InputFile $file.FullName -OutputLog "$baseName.sil.log" -OutputCsv "$baseName.sil.csv"
-
-
+        OutputFile = $deleteFile
+        SilenceFile = 'sil.csv'
+        RmsFile = 'RMS.csv'
     }
     
     # 1 RMS
@@ -147,21 +146,22 @@ foreach ($file in $mp3Files) {
 
    
     # 2 process silence 
-    # & $silenceScript @allParams
-    & $silenceScript -inputDir $InputDir -logPath $silenceLog -InputFile $file.FullName -OutputLog "$baseName.sil.log" -OutputCsv "$baseName.sil.csv"
-    
+    & $silenceScript @allParams
+    # & $silenceScript -inputDir $InputDir -logPath $silenceLog -InputFile $file.FullName -OutputLog "$baseName.sil.log" -OutputCsv "$baseName.sil.csv"
+    `
     
     # 3  interpolate 
-    & $inpScript -inputdir $InputDir -logPath $outLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $deleteFile
-
+    #& $inpScript -inputdir $InputDir -logPath $outLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $deleteFile
+    & $inpScript @allParams
 
     # 4  spectrum alternate processing option
-    & $spectrum01 -inputpath $inputDir -logPath "$outputDir\Logs" -InputFile $file.FullName -rmsFile "rms.csv" -SilenceFile "sil.csv" -OutputPath $OutputDir -OutputFile "new.mp3" -dd $dd
+  #  & $spectrum01 -inputpath $inputDir -logPath "$outputDir\Logs" -InputFile $file.FullName -rmsFile "rms.csv" -SilenceFile "sil.csv" -OutputPath $OutputDir -OutputFile "new.mp3" -dd $dd
+    & $spectrum01 @allParams
 
 
     # 5 trim and delete AND re-EXPORT result.
     $trimOutput = Join-Path $OutputDir "$baseName.mp3"
-    & $trimScript -dd $InputDir -logPath $outLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $trimOutput
+     & $trimScript -dd $InputDir -logPath $outLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $trimOutput
 
 }
 

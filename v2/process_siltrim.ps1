@@ -1,75 +1,88 @@
 <# trim and delete                                              v2.0.0
 -------------------------------------------------------------------------------------
-aselect will select audio sections we want to keep
-    delete the sections as per the delete file
+aselect will select audio sections we want to keep. Aim to keep speech.
+    delete the sections where there is NO silence marks like music.
+    loud background sections in commercials are to be deleted.
 #>
 
-[CmdletBinding()]
 param (
+    [string]$inputPath = "F:\av\audio\done",    
+    [string]$InputFile = "source.mp3",
     [string]$dd = 'F:\av\audio\downloads',
-    [string]$logPath = '\logs',
-    [string]$InputFile = 'source.mp3',
-    [string]$DeleteFile = 'sil.csv', # analysed silence result that show the sections to be deleted
-    [string]$OutputFile = 'new.mp3'
+    [string]$logPath = 'F:\av\audio\done\logs',
+    [string]$RmsFile = 'RMS.csv', # analysed rms levels result that show the sections to be deleted
+    [string]$SilenceFile = 'sil.csv',
+    [string]$OutputPath = 'F:\av\audio\done',    
+    [string]$OutputFile = 'new.mp3',
+    [string]$DeleteFile = 'sil.csv' # analysed silence result that show the sections to be deleted
 )
 
-
-    Set-Location -LiteralPath $dd
+    Set-Location -LiteralPath $OutputPath
     $logname = Join-Path $logPath 'delete.log'
     $ErrorActionPreference = 'Continue'
     $startFrame = 0
     $deleteRanges = [System.Collections.Generic.List[string]]::new()
     $pDStatus = $false
+    
+    $minDeleteSection = 10.0 # mininum section length to be deleted
+    $maxInterpolate = 10 # maximum seconds allowed for this interpolate
+     
 
-    $inputPath = if ([System.IO.Path]::IsPathRooted($InputFile)) {
+    $inFile = if ([System.IO.Path]::IsPathRooted($InputFile)) {
         $InputFile
     }
     else {
         Join-Path $dd $InputFile
     }
 
-    if (-not (Test-Path -LiteralPath $inputPath -PathType Leaf)) {
-        throw "Input file not found: $inputPath"
+    if (-not (Test-Path -LiteralPath $inFile -PathType Leaf)) {
+        throw "Input file not found: $inFile"
     }
-    if (-not (Test-Path -LiteralPath $DeleteFile -PathType Leaf)) {
-        throw "Delete CSV not found: $DeleteFile"
+    $delFile="$logPath\$DeleteFile"
+    if (-not (Test-Path -LiteralPath $DelFile -PathType Leaf)) {
+        throw "Delete CSV not found: $DelFile"
     }
     
-    Write-Host "========= trim and delete   =============================================" -ForegroundColor Blue
-    write-host "reading =  $DeleteFile"
+    Write-Host "========= sil trim and delete   =============================================" -ForegroundColor Blue
+    write-host "reading =  $DelFile"
 
     
     try {
+        $thisTime=1.0
+        $prevTime=1.0
+        $startSpeech=30.0 # first seconds of file are to be deleted. Speech starts after first 30 seconds have elapsed.
+        $toBeDeleted =1
         # import the csv data file with first row headers
-        $data = Import-Csv -LiteralPath $DeleteFile -Delimiter ","
-
-        # iterate each row and find the start frame of sections to be deleted
+        $data = Import-Csv -LiteralPath $DelFile -Delimiter ","
+        
+        # iterate each row and find the sections to be deleted
         foreach ($line in $data) {
-            $thisFrame=$line.Frame
+            $thisTime=$line.pts_time     # pts_time","start
 
-            if ($line.PSObject.Properties.Name -contains 'delete') {
-               
-               # $toBeDeleted = [bool]$line.delete
-                $toBeDeleted = [int]$line.delete # frame is to be deleted
-            }   # elseif ($line.PSObject.Properties.Name -contains 'com') {   $toBeDeleted = ([int]$line.com -eq 1)}
-            else {
-                $toBeDeleted = $false
-            }
-           
-           # write-host "$thisFrame $tobeDeleted"
-            if (($toBeDeleted) -and -not($pDStatus)) {
-                $startFrame = [int]$line.Frame
+            # first 30 seconds of file needs to be deleted
+            if ($thisTime -gt $startSpeech){
+                $toBeDeleted = [double]$line.pts_time # frame is to be deleted
             }
 
-            if (-not($toBeDeleted) -and ($pDStatus)) {
-                $endFrame = [int]$line.Frame
+            # measure the lengeth of delete sectionss
+
+
+
+            # interpolate small gaps in consecutive delete section
+            if (($toBeDeleted) -and -not($DelStatus)) {
+                $startFrame = [double]$line.end
+            }
+
+            if (-not($toBeDeleted) -and ($DelStatus)) {
+                $DelStatus=1
+                $endFrame = [double]$line.start
                 $deleteRanges.Add("between(n,$startFrame,$endFrame)")
             }
-            $pDStatus = $toBeDeleted
+            $prevTime = $thisTime
         }
 
-        if ($pDStatus) {
-            $deleteRanges.Add("gte(n,$startFrame)")
+        if ($DelStatus) {
+              $deleteRanges.Add("gte(n,$startFrame)")
         }
    
     # audio filter to output new audio file by selecting only the sections with speech
@@ -107,7 +120,7 @@ param (
     $args7 = @(
         '-y',
         '-hide_banner',
-        '-i', $inputPath,
+        '-i', $inFile,
         '-af', $FILTER,
         '-c:a', 'libmp3lame',
         '-q:a', '4',

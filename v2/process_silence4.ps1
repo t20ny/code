@@ -3,14 +3,19 @@
 #>
 param(
     [string]$InputDir="F:\av\audio\downloads",
-    [string]$InputFile="EUE.mp3",
-    [string]$logPath= '\logs',    
+    [string]$InputFile="source.mp3",
+    [string]$logPath= 'logs',    
+    [string]$OutputDir = 'F:\av\audio\done',
     [string]$OutputLog="silence.log",
-    [string]$OutputCsv = "EUE.csv"
+    [string]$OutputCsv = "sil.csv"
 )
 $debug=0
 Set-Location $InputDir
 #& $silenceScript -dd $InputDir -logPath $silenceLog -InputFile $file.FullName -OutputLog "$baseName.sil.log"
+if ($OutputCsv -notmatch "sil.csv"){
+    $OutputCsv =$OutputCsv -replace ".csv",".sil.csv"
+}
+$OutputCsv="$logPath\sil.Csv"
 
 # analyze the MP3 audio file
 $ErrorActionPreference = 'Continue'
@@ -72,11 +77,6 @@ function AnalyzeSilence {
         $OutputCsv = [System.IO.Path]::ChangeExtension("$fName", '.Silence.csv')
     }
 
-
-    $outputDirectory = Split-Path -Parent $OutputCsv
-    if ($outputDirectory) {
-        $null = New-Item -ItemType Directory -Path $outputDirectory -Force
-    }
 
    # process results from the analysis log and categorize silence segments
     $result = [System.Collections.Generic.List[object]]::new()
@@ -141,6 +141,7 @@ function AnalyzeSilence {
     
     Write-Host "=========  Silence output   $OutputCsv " 
 }
-    Write-Host "========= analyze silence   ===========================================" -foregroundColor Blue
-    Write-Host "Input   =  $InputFile"
+
+Write-Host "========= analyze silence   ===========================================" -foregroundColor Blue
+Write-Host "Input   =  $InputFile"
 AnalyzeSilence -Fname $InputFile -LogName $OutputLog

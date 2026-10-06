@@ -4,7 +4,6 @@ aselect will select audio sections we want to keep
     delete the sections as per the delete file
 #>
 
-[CmdletBinding()]
 param (
     [string]$dd = 'F:\av\audio\downloads',
     [string]$logPath = '\logs',

@@ -4,7 +4,6 @@ analyse the source data to and mark earh row with decision status to
 aim is delete the sections with loud rms and suppress high pitch music
 #>
 
-[CmdletBinding()]
 param (
     [string]$InputPath = 'F:\av\audio\done',    
     [string]$dd = 'F:\av\audio\downloads',
@@ -40,7 +39,7 @@ param (
    
     
     try {
-         Write-Host "========= load rms   =============================================" -ForegroundColor Blue
+         Write-Host "========= load rms      =============================================" -ForegroundColor Blue
         write-host "reading =  $RmsFile"
         # import the csv data file with first row headers
         $data1 = @(Import-Csv -Path "$LogPath\$RmsFile" -Delimiter ",")
@@ -117,7 +116,7 @@ param (
 
         $data = $mergedRows | Sort-Object { [long]$_.Frame }
         $data | Export-Csv -Path "$LogPath\Spectrum.csv"
-    <#
+    
         # iterate each row and find the start frame of sections to be deleted
         foreach ($line in $data) {
             $thisFrame=$line.Frame
@@ -157,13 +156,14 @@ param (
             $OutputFile
         }
         else {
-            Join-Path $dd $OutputFile
+            #Join-Path $dd $OutputFile
+            Join-Path $OutputPath $OutputFile
         }
         $outputDirectory = Split-Path -Parent $outputPath
         if ($outputDirectory) {
             $null = New-Item -ItemType Directory -Path $outputDirectory -Force
         }
-        $EQUALIZ="equalizer=f=6000:width_type=h:width=2000:g=-26"
+        $EQUALIZ="equalizer=f=6000:width_type=h:width=2000:g=-6"
         $FILTER="$FILTER,$EQUALIZ"
         $EQUALIZ="equalizer=f=8000:width_type=h:width=2000:g=-26"
         $FILTER="$FILTER,$EQUALIZ"
@@ -182,7 +182,7 @@ param (
         '-q:a', '4',
         $outputPath
         )
-    #>
+    
         $prevErrorPreference = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
         Write-Host "========= spectrum trim   =============================================" -ForegroundColor Blue
@@ -199,6 +199,81 @@ param (
         throw "ffmpeg exited with code $LASTEXITCODE"
     }
 
+    <# Count contiguous runs of marked frames and summarize their lengths by seconds.
+    $orderedData = @($data | Sort-Object { [long]$_.Frame })
+    $frameDurationTotal = 0.0
+    $frameDurationCount = 0
+    for ($index = 1; $index -lt $orderedData.Count; $index++) {
+        $previousRow = $orderedData[$index - 1]
+        $currentRow = $orderedData[$index]
+        if ([long]$currentRow.Frame -eq ([long]$previousRow.Frame + 1)) {
+            $duration = [double]$currentRow.pts_time - [double]$previousRow.pts_time
+            if ($duration -gt 0) {
+                $frameDurationTotal += $duration
+                $frameDurationCount++
+            }
+        }
+    }
+    $frameDurationSeconds = if ($frameDurationCount -gt 0) {
+        $frameDurationTotal / $frameDurationCount
+    } else {
+        1 / 38
+    }
+
+    $pulseRecords = [System.Collections.Generic.List[object]]::new()
+    $pulseLength = 0
+    $pulseMinute = $null
+    $previousFrame = $null
+
+    foreach ($row in $orderedData) {
+        $frame = [long]$row.Frame
+        $isPulse = [int]$row.delet2 -eq 1
+
+        if ($pulseLength -gt 0 -and (-not $isPulse -or $frame -ne ($previousFrame + 1))) {
+            $pulseRecords.Add([pscustomobject]@{
+                minute = $pulseMinute
+                lengthSeconds = $pulseLength * $frameDurationSeconds
+            })
+            $pulseLength = 0
+        }
+
+        if ($isPulse) {
+            if ($pulseLength -eq 0) {
+                $pulseMinute = [int]$row.minute
+            }
+            $pulseLength++
+        }
+        $previousFrame = $frame
+    }
+
+    if ($pulseLength -gt 0) {
+        $pulseRecords.Add([pscustomobject]@{
+            minute = $pulseMinute
+            lengthSeconds = $pulseLength * $frameDurationSeconds
+        })
+    }
+
+    $minutePulseSummary = @(
+        $pulseRecords |
+            Group-Object -Property minute |
+            Sort-Object { [int]$_.Name } |
+            ForEach-Object {
+                [pscustomobject]@{
+                    minute = [int]$_.Name
+                    pulseCount = $_.Count
+                    averageLengthSeconds = [math]::Round((($_.Group | Measure-Object -Property lengthSeconds -Average).Average), 3)
+                }
+            }
+    )
+
+    $minutePulseSummary | Format-Table -AutoSize | Out-Host
+    $overallAverageLength = if ($pulseRecords.Count -gt 0) {
+        [math]::Round((($pulseRecords | Measure-Object -Property lengthSeconds -Average).Average), 3)
+    } else {
+        0
+    }
+    Write-Host "Total pulses: $($pulseRecords.Count); overall average length: $overallAverageLength seconds"
+    #>
     Write-Host "Spec Log   $logName"
 
 

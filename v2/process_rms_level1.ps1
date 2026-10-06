@@ -6,15 +6,20 @@ param(
     [string]$inputDir = 'F:\av\audio\downloads',
     [string]$OutputDir = 'F:\av\audio\done',
     [string]$logPath = 'logs',    
-    [string]$InputFile = 'THE608.mp3', #  'THE608.mp3', #
+    [string]$InputFile = 'source.mp3', #  'THE608.mp3', #
     [string]$OutputCsv = 'rms.csv'
 )
-# rm "F:\av\audio\downloads\logs\THE608.rms.log"
+
 $debug=1
 [int]$attemps=1
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-$logName="test.log"
+$logName="process_rms.log"
+
+if ($OutputCsv -notmatch "rms"){
+    $OutputCsv =$OutputCsv -replace ".csv",".rms.csv"
+}
+$LogDir="$OutputDir\$logpath"
 
 $speechLvl=-60   # if rms level below Lvl then this window is speech   v1=-60
 $windowSize=200  # Theil–Sen regression window 38 frames per second so v1=200 about 5 seconds
@@ -193,9 +198,9 @@ function analyzeRMS {
     # if ($debug) {$result | Format-Table -Property Frame, RMS, rmsa, dif, tsA, tsM, pts, pts_time,delete ,cat -AutoSize}
 
     # export to csv
-    # $OutputCsv = $OutputCsv -replace '\.csv$', '.RMS.csv'
+
     $result | Export-Csv -LiteralPath "$inputDir\$OutputCsv" -NoTypeInformation
-    Copy-Item "$inputDir\$OutputCsv" "$OutputDir\rms.csv" # copy for spectrum.xlsx visualisations
+    Copy-Item "$inputDir\$OutputCsv" "$LogDir\rms.csv" # copy for spectrum.xlsx visualisations
     Write-Host "Exported= $OutputCsv"
 
     # Show the sum of delet2 values for each minute 
@@ -271,19 +276,19 @@ if (-not (Test-Path -LiteralPath $inputPath -PathType Leaf)) {
     throw "Input file not found= $inputPath"
 }
 
-$logDirectory = if ([System.IO.Path]::IsPathRooted($logPath)) {
+$logDir = if ([System.IO.Path]::IsPathRooted($logPath)) {
     $logPath
 } else {
     Join-Path $inputDir $logPath
 }
-$null = New-Item -ItemType Directory -Path $logDirectory -Force
+$null = New-Item -ItemType Directory -Path $logDir -Force
 $baseName = [System.IO.Path]::GetFileNameWithoutExtension($inputPath)
-$logName = Join-Path $logDirectory ("{0}.rms.log" -f $baseName)
+$logName = Join-Path $logDir ("{0}.rms.log" -f $baseName)
 $logFileName = Split-Path -Leaf $logName
 
 Write-Host "========= analyze RMS       ==============================================" -foregroundColor Blue
 #if ($debug){Write-Host "===== analyze RMS $inputPath   -analyzeLog $logName -OutputCsv $OutputCsv" -BackgroundColor Blue}
-Push-Location -LiteralPath $logDirectory
+Push-Location -LiteralPath $logDir
 try {
   if (test-path $logFileName){
     Write-Host "[1]====== Use the existing RMS log  $logFileName " -foregroundcolor yellow
