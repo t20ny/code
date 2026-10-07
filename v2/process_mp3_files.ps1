@@ -9,6 +9,7 @@ param(
     [string]$dd = 'F:\av\audio\downloads',
     [string]$OutputDir = 'F:\av\audio\done',
     [string[]]$fileArray = @(),
+    $debug=0,
     [switch]$Latest 
 )
 $scriptRoot = $PSScriptRoot
@@ -138,6 +139,7 @@ foreach ($file in $mp3Files) {
         OutputFile = $deleteFile
         SilenceFile = 'sil.csv'
         RmsFile = 'RMS.csv'
+        debug=$debug
     }
     
     # 1 RMS

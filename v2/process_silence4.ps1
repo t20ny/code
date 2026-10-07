@@ -1,4 +1,4 @@
-<# silence                                            v1.0.4
+<# silence                                            v1.0.5
    silence detect and analyse
 #>
 param(
@@ -15,6 +15,7 @@ Set-Location $InputDir
 if ($OutputCsv -notmatch "sil.csv"){
     $OutputCsv =$OutputCsv -replace ".csv",".sil.csv"
 }
+$baseName = [System.IO.Path]::GetFileNameWithoutExtension($OutputCsv)
 $OutputCsv="$logPath\sil.Csv"
 
 # analyze the MP3 audio file
@@ -87,7 +88,7 @@ function AnalyzeSilence {
     $previousSilenceEnd = 0.0
     $speechDuration = 0.0
     $category = 'none'
-
+    $delete=1
     foreach ($line in Get-Content -LiteralPath $logName) {
         if ($line -match '^frame:(?<frame>\d+)\s+pts:(?<pts>\S+)\s+pts_time:(?<ptsTime>\S+)') {
             $currentFrame = [int]$matches.frame
@@ -99,7 +100,10 @@ function AnalyzeSilence {
         if ($line -match '^lavfi\.silence_start=(?<start>-?\d+(?:\.\d+)?)$') {
             $silenceStart = [double]$matches.start
             $speechDuration = $silenceStart - $previousSilenceEnd
-            $category = if ($speechDuration -gt 25) { 'constant25' } 
+            $delete=0
+            $category = if ($speechDuration -gt 25) { 
+                $delete=1
+                'constant25' } 
             elseif ($speechDuration -gt 15) { 'constant15' } 
             elseif ($speechDuration -gt 5) { 'constant5' } 
             else { 'none' }
@@ -126,6 +130,7 @@ function AnalyzeSilence {
                 end = $silenceEnd
                 dura = $silenceDuration
                 cat = $category
+                Delete= $delete
             })
 
             $previousSilenceEnd = $silenceEnd

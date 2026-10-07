@@ -40,14 +40,12 @@ param (
     
     try {
          Write-Host "========= load rms      =============================================" -ForegroundColor Blue
-        write-host "reading =  $RmsFile"
-        # import the csv data file with first row headers
-        $data1 = @(Import-Csv -Path "$LogPath\$RmsFile" -Delimiter ",")
+        write-host "reading =  $LogPath\$RmsFile"
+        $data1 = @(Import-Csv -Path "$LogPath\$RmsFile" -Delimiter ",") # import rms csv data file with first row headers
 
         Write-Host "========= load silence   =============================================" -ForegroundColor Blue
-        write-host "reading =  $silenceFile"
-        # import the csv data file with first row headers
-        $data2 = @(Import-Csv -Path "$LogPath\$SilenceFile" -Delimiter ",")
+        write-host "reading =  $LogPath\$silenceFile"
+        $data2 = @(Import-Csv -Path "$LogPath\$SilenceFile" -Delimiter ",") # import sil csv data file with first row headers
 
         # Join by frame while keeping fields from both CSVs.
         if ($data1.Count -eq 0) {
@@ -116,8 +114,15 @@ param (
 
         $data = $mergedRows | Sort-Object { [long]$_.Frame }
         $data | Export-Csv -Path "$LogPath\Spectrum.csv"
-    
+
+          }
+    catch {
+        $Error[0]
+    }
+
+
         # iterate each row and find the start frame of sections to be deleted
+       <#
         foreach ($line in $data) {
             $thisFrame=$line.Frame
 
@@ -128,7 +133,7 @@ param (
                 $toBeDeleted = 0
             }
            
-           # write-host "$thisFrame $tobeDeleted"
+            write-host "$thisFrame $tobeDeleted"
             if (($toBeDeleted) -and -not($pDStatus)) {
                 $startFrame = [int]$line.Frame
             }
@@ -151,6 +156,8 @@ param (
             '0'
         }
         $FILTER = "aselect='not($deleteExpression)'"
+
+        write-host "Filter $FILTER"
 
         $outputPath = if ([System.IO.Path]::IsPathRooted($OutputFile)) {
             $OutputFile
@@ -198,7 +205,7 @@ param (
         }
         throw "ffmpeg exited with code $LASTEXITCODE"
     }
-
+#>
     <# Count contiguous runs of marked frames and summarize their lengths by seconds.
     $orderedData = @($data | Sort-Object { [long]$_.Frame })
     $frameDurationTotal = 0.0

@@ -6,11 +6,12 @@ param(
     [string]$inputDir = 'F:\av\audio\downloads',
     [string]$OutputDir = 'F:\av\audio\done',
     [string]$logPath = 'logs',    
-    [string]$InputFile = 'source.mp3', #  'THE608.mp3', #
-    [string]$OutputCsv = 'rms.csv'
+    [string]$InputFile = 'source.mp3', 
+    [string]$OutputCsv = 'rms.csv',
+    $debug=1
 )
 
-$debug=1
+
 [int]$attemps=1
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -198,10 +199,11 @@ function analyzeRMS {
     # if ($debug) {$result | Format-Table -Property Frame, RMS, rmsa, dif, tsA, tsM, pts, pts_time,delete ,cat -AutoSize}
 
     # export to csv
-
-    $result | Export-Csv -LiteralPath "$inputDir\$OutputCsv" -NoTypeInformation
-    Copy-Item "$inputDir\$OutputCsv" "$LogDir\rms.csv" # copy for spectrum.xlsx visualisations
-    Write-Host "Exported= $OutputCsv"
+    $ExportFile="$inputDir\$OutputCsv"
+    $result | Export-Csv -LiteralPath $ExportFile -NoTypeInformation
+    Copy-Item $ExportFile "$LogDir\rms.csv" # copy for spectrum.xlsx visualisations
+    Write-Host "Exported=  $ExportFile"
+    Write-Host "copied-->  $LogDir\rms.csv"
 
     # Show the sum of delet2 values for each minute 
     if ($debug) {
@@ -287,7 +289,10 @@ $logName = Join-Path $logDir ("{0}.rms.log" -f $baseName)
 $logFileName = Split-Path -Leaf $logName
 
 Write-Host "========= analyze RMS       ==============================================" -foregroundColor Blue
-#if ($debug){Write-Host "===== analyze RMS $inputPath   -analyzeLog $logName -OutputCsv $OutputCsv" -BackgroundColor Blue}
+if ($debug){Write-Host "analyze RMS  $inputPath   `n-analyzeLog  $logName " -BackgroundColor Blue
+            #Remove-Item $inputPath 
+            Remove-Item $logFileName
+}
 Push-Location -LiteralPath $logDir
 try {
   if (test-path $logFileName){

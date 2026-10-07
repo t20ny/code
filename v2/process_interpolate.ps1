@@ -16,19 +16,19 @@ param (
     [string]$InputFile = 'source.mp3',
     [string]$OutputCsv = 'rms.csv',
     [string]$DeleteFile = 'RMS.csv', # analysed rms levels result that show the sections to be deleted
-    [string]$OutputFile = 'RMS5.csv', # final output
+    [string]$OutputFile = 'RMS.csv', # final output
     [string]$OutputLog = 'logs'
 
 )
    $logsDir="$outputDir\$logPath"
     $framesPerSecond = 38
     $minGap       = $framesPerSecond * 5   # if two delete sections are only 4 seconds apart, fill the gap to keep a single pulse block
-    $minDelete    = $framesPerSecond * 3   # anything shorter than 2 seconds is likely noise, flatten it back to speech
+    $minDelete    = $framesPerSecond * 5   # anything shorter than 2 seconds is likely noise, flatten it back to speech
     $preDeleteRun = $framesPerSecond * 5   # pad 5 seconds before a valid delete run
-    $minDeleteRun = $framesPerSecond * 10   # if valid delete seciton limit 10 seconds of additional delete padding to next section
+    $minDeleteRun = $framesPerSecond * 8   # if valid delete seciton limit 10 seconds of additional delete padding to next section
     $startDelete  = $framesPerSecond * 60  # first 12 seconds of the file should be marked as delete
-    $endDelete    = $framesPerSecond * 4   # end 4 seconds of the file shoudl be marked as deletes
-    $tightenDelete = [Math]::Floor($framesPerSecond * 5)  # anything under 1.5s is treated as a noise burst and collapsed back to speech
+    $endDelete    = $framesPerSecond * 4   # end 4 seconds of the file should be marked as deletes
+    $tightenDelete = [Math]::Floor($framesPerSecond * 5)  # anything under 5s is treated as a noise burst and collapsed back to speech
     $maxPulseCount= 6 # limit of count of pulse block in the final file. if more than 6 then file will need to be re-processed.
     $widePulseCount=0    # count the number of wide pulse blocks
     $tinyPulseCount=0    # count the number of narrow pulses 
