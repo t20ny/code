@@ -7,9 +7,10 @@ param(
     [string]$logPath= 'logs',    
     [string]$OutputDir = 'F:\av\audio\done',
     [string]$OutputLog="silence.log",
-    [string]$OutputCsv = "sil.csv"
+    [string]$OutputCsv = "sil.csv",
+    $debug=0
 )
-$debug=0
+
 Set-Location $InputDir
 #& $silenceScript -dd $InputDir -logPath $silenceLog -InputFile $file.FullName -OutputLog "$baseName.sil.log"
 if ($OutputCsv -notmatch "sil.csv"){
@@ -49,7 +50,16 @@ function AnalyzeSilence {
         '-f', 'null', '-'
         )
     $previousPreference = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
+    if ($debug){
+        write-host $InputDir -ForegroundColor Cyan
+        if (-not(test-path $filterLogPath)){Write-Host "PATH ERROR $filterLogPath" -ForegroundColor red }
+        if (-not(test-path $fName)){Write-Host "PATH ERROR $fName" -ForegroundColor red}
+        foreach($aa in $arguments){
+            Write-Host $aa -ForegroundColor Yellow
+        }
+    }
+
+    #$ErrorActionPreference = 'Continue'
     try {
         & ffmpeg @arguments 2>$null | Out-Null
     }
@@ -57,10 +67,10 @@ function AnalyzeSilence {
         $ErrorActionPreference = $previousPreference
     }
     if ($LASTEXITCODE -ne 0) {
-        throw "ffmpeg silence analysis failed for '$fName' with exit code $LASTEXITCODE"
+        write-host "ffmpeg silence analysis failed for '$fName' with exit code $LASTEXITCODE" -ForegroundColor red
+       # throw "ffmpeg silence analysis failed for '$fName' with exit code $LASTEXITCODE"
     }
-
-
+ 
     if (-not (Test-Path -LiteralPath $fName -PathType Leaf)) {
         throw "Input file not found: $fName"
     }

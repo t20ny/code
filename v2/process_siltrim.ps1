@@ -31,7 +31,7 @@ param (
     $minDelete = 5.0
     $preDeleteRun = 5.0
     $minDeleteRun = $framesPerSecond * 8
-    $startDelete = 60.0
+    $startDelete = 20.0
     $endDelete = 4.0
     $tightenDelete = 5.0
     $maxPulseCount = 6
@@ -50,6 +50,7 @@ param (
         throw "Input file not found: $inFile"
     }
     $fname="$logPath\$DeleteFile"
+    $fname="$logPath\$SilenceFile"
     if (-not (Test-Path -LiteralPath $fname -PathType Leaf)) {
         throw "Delete CSV not found: $fname"
     }
@@ -58,7 +59,9 @@ param (
         $OutputFile
     }
     else {
-        Join-Path $dd $OutputFile
+        if ($debug) {Join-Path $dd $OutputFile
+        write-host "DEBUG out is $dd "}
+        else {Join-Path $outputPath $OutputFile}
     }
     $outputDirectory = Split-Path -Parent $outputPath
     if ($outputDirectory) {
@@ -488,11 +491,19 @@ function analyze2 {
     param($data)
 
     $deleteRanges = [System.Collections.Generic.List[string]]::new()
+    $sectionStart = 0
     foreach ($row in $data) {
+
+         if ([int]$row.delete -eq 0){
+            $sectionStart = [double]$row.end
+         }
+
+
         if ([int]$row.delete -ne 1) { continue }
 
-        $sectionStart = [double]$row.start
-        $sectionEnd = [double]$row.end
+       # $sectionStart = [double]$row.start
+       # $sectionEnd = [double]$row.end
+        $sectionEnd = [double]$row.start
         if ($sectionEnd -le $sectionStart) { continue }
 
         $deleteRanges.Add([string]::Format(
@@ -567,7 +578,7 @@ function trimBlocks{
 $data =(getSilFile "$logPath\$SilenceFile")
 
 $newData = interpolate $data
-$newData | Export-Csv -Path "$LogDir\silnew_.csv"
+$newData | Export-Csv -Path "$LogPath\silnew_.csv"
 
 # filter should remove the sections with delete marks
 $filter = analyze2 $newData
@@ -576,9 +587,9 @@ $retryCount = 0
 
 # while ((analyse $newData) -gt $maxPulseCount -and $retryCount -lt 10) {
 while ((analyze1 $newData) -lt 1 -and $retryCount -lt 4) {
-    write-host "retry analyze1"
+    write-host "retry $retryCount with analyze1" -ForegroundColor Cyan
     $newData = interpolate $newData
-    $newData | Export-Csv -Path "$LogDir\silnew$retryCount.csv"
+    $newData | Export-Csv -Path "$LogPath\silnew$retryCount.csv"
     $filter = analyze2 $newData
 
     $retryCount++

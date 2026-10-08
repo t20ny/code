@@ -126,45 +126,57 @@ foreach ($file in $mp3Files) {
     # trim step will delete the sections identified and output a new completed mp3 file
     $deleteFile = Join-Path $InputDir "$baseName.RMS.csv"
     $trimScript = Join-Path $scriptRoot 'process_trim3.ps1'
+    $silencetrim = Join-Path $scriptRoot 'process_siltrim.ps1'
     $spectrum01 = Join-Path $scriptRoot 'process_spectrum1.ps1'
     
 
     $allParams = @{
         inputDir  = $InputDir
         logPath   = $outLogDir
-        InputFile = $file.FullName
+        InputFile = $file.Name
         OutputCsv = "$baseName.csv"
         OutputLog = "$baseName.log"
         DeleteFile = $deleteFile
-        OutputFile = $deleteFile
+        OutputPath= $OutputDir
+        OutputFile = "$baseName.mp3"
         SilenceFile = 'sil.csv'
         RmsFile = 'RMS.csv'
         debug=$debug
     }
     
-    # 1 RMS
-    & $rmsScript @allParams
-    # & $rmsScript -inputDir $InputDir -logPath $outLogDir -InputFile $file.FullName -OutputCsv "$baseName.csv"
+    if ($debug){ # FULL RMS ANALYSIS and PROCESSING Trim #
+        # 1 RMS
+        & $rmsScript @allParams
+        # & $rmsScript -inputDir $InputDir -logPath $outLogDir -InputFile $file.FullName -OutputCsv "$baseName.csv"
 
-   
-    # 2 process silence 
-    & $silenceScript @allParams
-    # & $silenceScript -inputDir $InputDir -logPath $silenceLog -InputFile $file.FullName -OutputLog "$baseName.sil.log" -OutputCsv "$baseName.sil.csv"
-    `
     
-    # 3  interpolate 
-    #& $inpScript -inputdir $InputDir -logPath $outLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $deleteFile
-    & $inpScript @allParams
+        # 2 process silence 
+        & $silenceScript @allParams
+        # & $silenceScript -inputDir $InputDir -logPath $silenceLog -InputFile $file.FullName -OutputLog "$baseName.sil.log" -OutputCsv "$baseName.sil.csv"
+        
+        
+        # 3  interpolate 
+        #& $inpScript -inputdir $InputDir -logPath $outLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $deleteFile
+        & $inpScript @allParams
 
-    # 4  spectrum alternate processing option
-  #  & $spectrum01 -inputpath $inputDir -logPath "$outputDir\Logs" -InputFile $file.FullName -rmsFile "rms.csv" -SilenceFile "sil.csv" -OutputPath $OutputDir -OutputFile "new.mp3" -dd $dd
-    & $spectrum01 @allParams
+        # 4  spectrum alternate processing option
+        #  & $spectrum01 -inputpath $inputDir -logPath "$outputDir\Logs" -InputFile $file.FullName -rmsFile "rms.csv" -SilenceFile "sil.csv" -OutputPath $OutputDir -OutputFile "new.mp3" -dd $dd
+        & $spectrum01 @allParams
 
+        # 5 trim and delete AND re-EXPORT result.
+        $trimOutput = Join-Path $OutputDir "$baseName.mp3"
+        & $trimScript -dd $InputDir -logPath $outLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $trimOutput
 
-    # 5 trim and delete AND re-EXPORT result.
-    $trimOutput = Join-Path $OutputDir "$baseName.mp3"
-     & $trimScript -dd $InputDir -logPath $outLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $trimOutput
+    }
+    else { # SILENCE PROCESSING ONLY #
 
+        # 2 process silence 
+        & $silenceScript @allParams
+        # & $silenceScript -inputDir $InputDir -logPath $silenceLog -InputFile $file.FullName -OutputLog "$baseName.sil.log" -OutputCsv "$baseName.sil.csv"
+        
+        # 5 trim and delete AND re-EXPORT result.
+        & $silencetrim @allParams
+    }
 }
 
 Write-Log "Finished processing $($mp3Files.Count) MP3 file(s)."
