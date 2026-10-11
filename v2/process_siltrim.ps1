@@ -6,15 +6,16 @@ aselect will select audio sections we want to keep. Aim to keep speech.
 #>
 
 param (
-    [string]$inputPath = "F:\av\audio\done",    
+    [string]$inputPath = "F:\av\audio\done",
     [string]$InputFile = "source.mp3",
     [string]$dd = 'F:\av\audio\downloads',
     [string]$logPath = 'F:\av\audio\done\logs',
     [string]$RmsFile = 'RMS.csv', # analysed rms levels result that show the sections to be deleted
     [string]$SilenceFile = 'sil.csv',
-    [string]$OutputPath = 'F:\av\audio\done',    
+    [string]$OutputPath = 'F:\av\audio\done',
     [string]$OutputFile = 'new.mp3',
-    [string]$DeleteFile = 'sil.csv' # analysed silence result that show the sections to be deleted
+    [string]$DeleteFile = 'sil.csv', # analysed silence result that show the sections to be deleted
+    [switch]$Debug
 )
 
     Set-Location -LiteralPath $OutputPath
@@ -31,8 +32,8 @@ param (
     $minDelete = 5.0
     $preDeleteRun = 5.0
     $minDeleteRun = $framesPerSecond * 8
-    $startDelete = 20.0
-    $endDelete = 4.0
+    $startSpeech=31.0 # first seconds of file are to be deleted. Speech starts after first 30 seconds have elapsed.
+    $endDelete = 0.0 # leave the remaining file intact; no trailing delete window
     $tightenDelete = 5.0
     $maxPulseCount = 6
     $widePulseCount = 0
@@ -52,7 +53,8 @@ param (
     $fname="$logPath\$DeleteFile"
     $fname="$logPath\$SilenceFile"
     if (-not (Test-Path -LiteralPath $fname -PathType Leaf)) {
-        throw "Delete CSV not found: $fname"
+        write-host "Delete CSV not found: $fname"
+        # throw
     }
     
     $outputPath = if ([System.IO.Path]::IsPathRooted($OutputFile)) {
@@ -70,20 +72,63 @@ param (
 
     Write-Host "========= sil trim and delete   =============================================" -ForegroundColor Blue
     
- function getSilFile {
-    param( [string]$fName)
 
-    write-host "reading =  $fname"
-    
+ function getSilFile {
+    param([string]$fName)
+
+    Write-Host "reading =  $fName"
+
     try {
-        # import the csv data file with first row headers
-        $data = @(Import-Csv -LiteralPath $fname -Delimiter ",")
+        return @(Import-Csv -LiteralPath $fName -Delimiter ",")
     }
-    catch{$error[0]}
-    return $data
+    catch {
+        Write-Host $error[0]
+        return @()
+    }
 }
 
 
+function Ensure-RowProperty {
+    param(
+        [Parameter(Mandatory = $true)]
+        [psobject]$Row,
+        [Parameter(Mandatory = $true)]
+        [string]$PropertyName,
+        [object]$Value
+    )
+
+    if ($null -eq $Row) { return $null }
+
+    $propertyNames = @($Row.PSObject.Properties.Name)
+    $existingProperty = $propertyNames | Where-Object { $_ -ieq $PropertyName } | Select-Object -First 1
+
+    if ($existingProperty) {
+        $Row.$existingProperty = $Value
+        return $Row
+    }
+
+    $null = $Row | Add-Member -NotePropertyName $PropertyName -NotePropertyValue $Value -Force
+    return $Row
+}
+
+function Get-RowPropertyValue {
+    param(
+        [psobject]$Row,
+        [string]$PropertyName,
+        [object]$Default = $null
+    )
+
+    if ($null -eq $Row) { return $Default }
+
+    $propertyNames = @($Row.PSObject.Properties.Name)
+    $existingProperty = $propertyNames | Where-Object { $_ -ieq $PropertyName } | Select-Object -First 1
+
+    if (-not $existingProperty) { return $Default }
+
+    $value = $Row.$existingProperty
+    if ($null -eq $value) { return $Default }
+    return $value
+}
 
 function Set-DeleteState {
     param($data)
@@ -91,26 +136,13 @@ function Set-DeleteState {
     foreach ($row in @($data)) {
         if ($null -eq $row) { continue }
 
-        $deleteValue = if ($row.PSObject.Properties.Name -contains 'delete') {
-            [int]$row.delete
-        }
-        else {
-            0
-        }
+        $deleteValue = [int](Get-RowPropertyValue -Row $row -PropertyName 'delete' -Default 0)
 
-        if (-not ($row.PSObject.Properties.Name -contains 'delet2')) {
-            $null = $row | Add-Member -NotePropertyName delet2 -NotePropertyValue $deleteValue
-        }
-        if (-not ($row.PSObject.Properties.Name -contains 'delete')) {
-            $null = $row | Add-Member -NotePropertyName delete -NotePropertyValue $deleteValue
-        }
-        if (-not ($row.PSObject.Properties.Name -contains 'cat')) {
-            $null = $row | Add-Member -NotePropertyName cat -NotePropertyValue 'unset'
-        }
+        $row = Ensure-RowProperty -Row $row -PropertyName 'delete' -Value $deleteValue
+        $row = Ensure-RowProperty -Row $row -PropertyName 'cat' -Value 'unset'
 
-        $row.delet2 = [int]$deleteValue
-        $row.delete = [int]$deleteValue
-        $row.cat = [string]$row.cat
+        $row.delete = $deleteValue
+        $row.cat = [string](Get-RowPropertyValue -Row $row -PropertyName 'cat' -Default 'unset')
     }
 
     return @($data)
@@ -121,30 +153,20 @@ function Ensure-RowState {
 
     if ($null -eq $row) { return $null }
 
-    foreach ($propertyName in @('delete','delet2','cat')) {
-        if (-not ($row.PSObject.Properties.Name -contains $propertyName)) {
-            $null = $row | Add-Member -NotePropertyName $propertyName -NotePropertyValue 0
-        }
-    }
+    $row = Ensure-RowProperty -Row $row -PropertyName 'delete' -Value 0
+    $row = Ensure-RowProperty -Row $row -PropertyName 'cat' -Value 'unset'
 
-    if ($row.PSObject.Properties.Name -contains 'cat' -and $null -eq $row.cat) {
-        $row.cat = 'unset'
-    }
-
-    if ($row.PSObject.Properties.Name -contains 'delete' -and $null -eq $row.delete) {
-        $row.delete = 0
-    }
-
-    if ($row.PSObject.Properties.Name -contains 'delet2' -and $null -eq $row.delet2) {
-        $row.delet2 = 0
-    }
+    if ($null -eq $row.delete) { $row.delete = 0 }
+    if ($null -eq $row.cat) { $row.cat = 'unset' }
 
     return $row
 }
 
 function interpolate{
         param($data)
-
+    $thisTime=1.0
+    $prevTime=1.0
+    $toBeDeleted =1
     $data = Set-DeleteState $data
     $lastFrame = @($data).Count
     if ($lastFrame -eq 0) {
@@ -153,31 +175,17 @@ function interpolate{
     # step 1
     # read the values in the data file as a PSobject table
     foreach ($row in $data) {
+        if ($null -eq $row) { continue }
+
         # step 1        
         # read the delete column values 
-        $deleteValue = if ($row.PSObject.Properties.Name -contains 'delete') {
-            [int]$row.delete
-        }
-       # elseif ($row.PSObject.Properties.Name -contains 'delet2') {
-       #     [int]$row.delet2
-       # }
-        else {
-            0
-        }
+        $deleteValue = [int](Get-RowPropertyValue -Row $row -PropertyName 'delete' -Default 0)
 
-        if ($row.PSObject.Properties.Name -contains 'delet2') {
-            $row.delet2 = $deleteValue
-        }
-        else {
-            $row | Add-Member -NotePropertyName delet2 -NotePropertyValue $deleteValue
-        }
+        $row = Ensure-RowProperty -Row $row -PropertyName 'delete' -Value $deleteValue
+        $row.delete = [int]$deleteValue
 
-        if ($row.PSObject.Properties.Name -contains 'delete') {
-            $row.delete = $deleteValue
-        }
-        else {
-            $row | Add-Member -NotePropertyName delete -NotePropertyValue $deleteValue
-        }
+        if ($debug){ write-host $row.Frame $row.start  $row.cat	 $row.Delete }
+
     }
 
     $adjacentCategoryDeleteIndexes = [System.Collections.Generic.List[int]]::new()
@@ -191,47 +199,54 @@ function interpolate{
         }
     }
     
-
-
     # step 2
-    # Mark sections that start before the initial time cutoff.
+    # Mark sections that start before the initial time mark with 1-value
     $strtSectionLength = 0
-    while ($strtSectionLength -lt $lastFrame -and [double]$data[$strtSectionLength].start -lt $startDelete) {
+    while ($strtSectionLength -lt $lastFrame -and [double]$data[$strtSectionLength].start -lt $startSpeech) {
         $strtSectionLength++
     }
     for ($index = 0; $index -lt $strtSectionLength; $index++) {
         $row = Ensure-RowState $data[$index]
         $row.delete = 1
-        $row.delet2 = 1
+     #   $row.delet2 = 1
         $row.cat = "ip1start"
         $data[$index] = $row
+       if ($debug){ write-host "20  $($index)"}
     }
 
+   
     # step 3
     # clear short noise bursts before filling short gaps between real delete runs
+    # only after the start section has been marked
     for ($index = $strtSectionLength; $index -lt $lastFrame;) {
         if ([int]$data[$index].delete -eq 0) {
             $index++
             continue
         }
-
+        if ($debug){ write-host "30  $($index)"}
         $runStart = $index
         while ($index -lt $lastFrame -and [int]$data[$index].delete -eq 1) {
             $index++
         }
+        if ($debug){ write-host "31  $($index)"
+            write-host $data[$index].Frame	$data[$index].start  $data[$index].end  $data[$index].cat	          $data[$index].Delete	
+        }
+        
+        if ($debug){ write-host $row.Frame $row.start  $row.cat	 $row.Delete }
 
         $runDuration = [double]$data[$index - 1].end - [double]$data[$runStart].start
         if ($runDuration -lt $tightenDelete) {
             for ($runIndex = $runStart; $runIndex -lt $index; $runIndex++) {
                 $row = Ensure-RowState $data[$runIndex]
                 $row.delete = 0
-                $row.delet2 = 0
+             #   $row.delet2 = 0
                 $row.cat = "ip3noise"
                 $data[$runIndex] = $row
             }
         }
     }
 
+    if ($debug){ write-host "40  $($index)"}
     # step 4
     # Fill short speech gaps only when they are bounded by retained delete runs.
     for ($index = $strtSectionLength; $index -lt $lastFrame;) {
@@ -239,12 +254,12 @@ function interpolate{
             $index++
             continue
         }
-
+        if ($debug){ write-host "41  $($index)"}
         $gapStart = $index
         while ($index -lt $lastFrame -and [int]$data[$index].delete -eq 0) {
             $index++
         }
-
+        if ($debug){ write-host "42  $($index)"}
         $hasDeleteBefore = $gapStart -gt 0 -and [int]$data[$gapStart - 1].delete -eq 1
         $hasDeleteAfter = $index -lt $lastFrame -and [int]$data[$index].delete -eq 1
         $gapDuration = [double]::PositiveInfinity
@@ -255,13 +270,14 @@ function interpolate{
             for ($gapIndex = $gapStart; $gapIndex -lt $index; $gapIndex++) {
                 $row = Ensure-RowState $data[$gapIndex]
                 $row.delete = 1
-                $row.delet2 = 1
+             #   $row.delet2 = 1
                 $row.cat = "ip4gap"
                 $data[$gapIndex] = $row
             }
         }
     }
 
+    if ($debug){ write-host "50  $($index)"}
     # step 5
     # Remove short delete runs after the speech-gap fill.
     for ($index = $strtSectionLength; $index -lt $lastFrame;) {
@@ -276,17 +292,18 @@ function interpolate{
         }
 
         $runDuration = [double]$data[$index - 1].end - [double]$data[$runStart].start
-        if (($runDuration -lt $minDelete) -and ([double]$data[$runStart].start -ge $startDelete)) {
+        if (($runDuration -lt $minDelete) -and ([double]$data[$runStart].start -ge $startSpeech)) {
             for ($runIndex = $runStart; $runIndex -lt $index; $runIndex++) {
                 $row = Ensure-RowState $data[$runIndex]
                 $row.delete = 0
-                $row.delet2 = 0
+             #   $row.delet2 = 0
                 $row.cat = "ip5collapse"
                 $data[$runIndex] = $row
             }
         }
     }
 
+    if ($debug){ write-host "60  $($index)"}
     # step 6
     # pad before valid delete sections so they remain coherent blocks
     $prepadEnd = $strtSectionLength
@@ -305,13 +322,14 @@ function interpolate{
         for ($padIndex = $runStart - 1; $padIndex -ge 0 -and [double]$data[$padIndex].end -gt $padBeforeTime; $padIndex--) {
             $row = Ensure-RowState $data[$padIndex]
             $row.delete = 1
-            $row.delet2 = 1
+          #  $row.delet2 = 1
             $row.cat = "ip6prePad"
             $data[$padIndex] = $row
             $prepadEnd = $padIndex
         }
     }
 
+    if ($debug){ write-host "70  $($index)"}
     # step 7
     # Mark sections that overlap the final time window.
     $fileEndTime = [double]$data[$lastFrame - 1].end
@@ -320,11 +338,12 @@ function interpolate{
         if ([double]$data[$index].end -le $endDeleteFrom) { continue }
         $row = Ensure-RowState $data[$index]
         $row.delete = 1
-        $row.delet2 = 1
+     #   $row.delet2 = 1
         $row.cat = "ip7end"
         $data[$index] = $row
     }
 
+    if ($debug){ write-host "80  $($index)"}
     # step 8 - tighten: clear short noise bursts that do not belong to a real pulse block.
     for ($index = 0; $index -lt $lastFrame;) {
         if ([int]$data[$index].delete -eq 0) {
@@ -340,24 +359,26 @@ function interpolate{
         $runStartTime = [double]$data[$runStart].start
         $runEndTime = [double]$data[$index - 1].end
         $runDuration = $runEndTime - $runStartTime
-        $isBorderPulse = ($runStartTime -lt $startDelete) -or (($fileEndTime - $runEndTime) -lt $endDelete)
+        $isBorderPulse = ($runStartTime -lt $startSpeech) -or (($fileEndTime - $runEndTime) -lt $endDelete)
         if ($runDuration -lt $tightenDelete -and -not $isBorderPulse) {
             for ($runIndex = $runStart; $runIndex -lt $index; $runIndex++) {
                 $row = Ensure-RowState $data[$runIndex]
                 $row.delete = 0
-                $row.delet2 = 0
+         #       $row.delet2 = 0
                 $row.cat = "ip8tighten"
                 $data[$runIndex] = $row
             }
         }
     }
 
+    if ($debug){ write-host "100  $($index)"}
     foreach ($index in $adjacentCategoryDeleteIndexes) {
         $row = Ensure-RowState $data[$index]
         $row.delete = 1
-        $row.delet2 = 1
+     #   $row.delet2 = 1
         $row.cat = "ip9adjacent"
         $data[$index] = $row
+        if ($debug){ write-host "101  $($index)"}
     }
 
     return $data
@@ -491,26 +512,42 @@ function analyze2 {
     param($data)
 
     $deleteRanges = [System.Collections.Generic.List[string]]::new()
-    $sectionStart = 0
-    foreach ($row in $data) {
+    $runStart = $null
+    $runEnd = $null
+    $previousTime =0 # initial delete section start at beginning of file
 
-         if ([int]$row.delete -eq 0){
-            $sectionStart = [double]$row.end
-         }
+    foreach ($row in @($data)) {
+        $isDelete = [int](Get-RowPropertyValue -Row $row -PropertyName 'delete' -Default 0) -eq 1
+        $thisTime = [double](Get-RowPropertyValue -Row $row -PropertyName 'pts_time' -Default 0)
 
+        if ($isDelete) {
+            if ($null -eq $runStart) {
+                $runStart = [double]$row.start
+            }
+            $runEnd = [double]$row.end
+            continue
+        }
 
-        if ([int]$row.delete -ne 1) { continue }
+        if ($null -ne $runStart -and $null -ne $runEnd -and $null -ne $previousTime) {
+            $deleteRanges.Add([string]::Format(
+                [System.Globalization.CultureInfo]::InvariantCulture,
+                'between(t,{0:R},{1:R})',
+                [Math]::Max(0.0, $previousTime),
+                [Math]::Min([double]$row.start, [double]$runStart)
+            ))
+            $runStart = $null
+            $runEnd = $null
+        }
 
-       # $sectionStart = [double]$row.start
-       # $sectionEnd = [double]$row.end
-        $sectionEnd = [double]$row.start
-        if ($sectionEnd -le $sectionStart) { continue }
+        $previousTime = $thisTime
+    }
 
+    if ($null -ne $runStart -and $null -ne $runEnd -and $null -ne $previousTime) {
         $deleteRanges.Add([string]::Format(
             [System.Globalization.CultureInfo]::InvariantCulture,
             'between(t,{0:R},{1:R})',
-            $sectionStart,
-            $sectionEnd
+            [Math]::Max(0.0, $previousTime),
+            [Math]::Max(0.0, $runStart)
         ))
     }
 
@@ -523,6 +560,100 @@ function analyze2 {
     }
     $FILTER = "aselect='not($deleteExpression)'"
     return $FILTER
+}
+
+
+
+
+function old1{   
+    try {
+        $thisTime=1.0
+        $prevTime=1.0
+        $toBeDeleted =1
+        # import the csv data file with first row headers
+        $data = Import-Csv -LiteralPath $DelFile -Delimiter ","
+        
+        # iterate each row and find the sections to be deleted
+        foreach ($line in $data) {
+            $thisTime=$line.pts_time     # pts_time","start
+
+            # first 30 seconds of file needs to be deleted
+            if ($thisTime -gt $startSpeech){
+                $toBeDeleted = [double]$line.pts_time # frame is to be deleted
+            }
+
+            # measure the lengeth of delete sectionss
+
+
+
+            # interpolate small gaps in consecutive delete section
+            if (($toBeDeleted) -and -not($DelStatus)) {
+                $startFrame = [double]$line.end
+            }
+
+            if (-not($toBeDeleted) -and ($DelStatus)) {
+                $DelStatus=1
+                $endFrame = [double]$line.start
+                $deleteRanges.Add("between(n,$startFrame,$endFrame)")
+            }
+            $prevTime = $thisTime
+        }
+
+        if ($DelStatus) {
+              $deleteRanges.Add("gte(n,$startFrame)")
+        }
+   
+        # audio filter to output new audio file by selecting only the sections with speech
+        $deleteExpression = if ($deleteRanges.Count -gt 0) {
+            $deleteRanges -join '+'
+        } else {
+            '0'
+        }
+        $FILTER = "aselect='not($deleteExpression)'"
+        
+    }catch{$error[0]}
+}
+
+
+
+function analyze3 {
+    param($data)
+
+    return analyze2 $data
+}
+
+function Get-TrimmedSeconds {
+    param($data)
+
+    $totalSeconds = 0.0
+    $runStart = $null
+    $runEnd = $null
+
+    foreach ($row in @($data)) {
+        if ($null -eq $row) { continue }
+
+        $isDelete = [int](Get-RowPropertyValue -Row $row -PropertyName 'delete' -Default 0) -eq 1
+
+        if ($isDelete) {
+            if ($null -eq $runStart) {
+                $runStart = [double]$row.start
+            }
+            $runEnd = [double]$row.end
+            continue
+        }
+
+        if ($null -ne $runStart -and $null -ne $runEnd) {
+            $totalSeconds += [Math]::Max(0.0, $runEnd - $runStart)
+            $runStart = $null
+            $runEnd = $null
+        }
+    }
+
+    if ($null -ne $runStart -and $null -ne $runEnd) {
+        $totalSeconds += [Math]::Max(0.0, $runEnd - $runStart)
+    }
+
+    return $totalSeconds
 }
 
 
@@ -581,7 +712,7 @@ $newData = interpolate $data
 $newData | Export-Csv -Path "$LogPath\silnew_.csv"
 
 # filter should remove the sections with delete marks
-$filter = analyze2 $newData
+$filter = analyze3 $newData
 
 $retryCount = 0
 
@@ -590,10 +721,15 @@ while ((analyze1 $newData) -lt 1 -and $retryCount -lt 4) {
     write-host "retry $retryCount with analyze1" -ForegroundColor Cyan
     $newData = interpolate $newData
     $newData | Export-Csv -Path "$LogPath\silnew$retryCount.csv"
-    $filter = analyze2 $newData
+    $filter = analyze3 $newData
 
     $retryCount++
 }
+
+$trimmedSeconds = Get-TrimmedSeconds $newData
+$trimmedSummary = "Total seconds trimmed: $([math]::Round($trimmedSeconds, 3))"
+Write-Host $trimmedSummary
+Add-Content -LiteralPath $logName -Value $trimmedSummary
 
 
     # step 9

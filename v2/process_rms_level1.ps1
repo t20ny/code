@@ -5,7 +5,7 @@
 param(
     [string]$inputDir = 'F:\av\audio\downloads',
     [string]$OutputDir = 'F:\av\audio\done',
-    [string]$logPath = 'logs',    
+    [string]$logPath = 'F:\av\audio\done\logs',    
     [string]$InputFile = 'source.mp3', 
     [string]$OutputCsv = 'rms.csv',
     $debug=1
@@ -20,7 +20,7 @@ $logName="process_rms.log"
 if ($OutputCsv -notmatch "rms"){
     $OutputCsv =$OutputCsv -replace ".csv",".rms.csv"
 }
-$LogDir="$OutputDir\$logpath"
+$LogDir=$logpath
 
 $speechLvl=-60   # if rms level below Lvl then this window is speech   v1=-60
 $windowSize=200  # Theil–Sen regression window 38 frames per second so v1=200 about 5 seconds
@@ -291,7 +291,7 @@ $logFileName = Split-Path -Leaf $logName
 Write-Host "========= analyze RMS       ==============================================" -foregroundColor Blue
 if ($debug){Write-Host "analyze RMS  $inputPath   `n-analyzeLog  $logName " -BackgroundColor Blue
             #Remove-Item $inputPath 
-            Remove-Item $logFileName
+            if (test-path $logFileName){Remove-Item $logFileName}
 }
 Push-Location -LiteralPath $logDir
 try {

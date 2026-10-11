@@ -13,6 +13,7 @@ param(
     [switch]$Latest 
 )
 $scriptRoot = $PSScriptRoot
+$scriptCaller = $$
 Set-Location -LiteralPath $scriptRoot
 
 Set-StrictMode -Version Latest
@@ -20,7 +21,7 @@ $ErrorActionPreference = 'Stop'
 
 $dts = (Get-Date).ToString('yyyyMMdd.HHmmss')
 $ymd = (Get-Date).ToString('yyyyMMdd')
-$script:LogDirectory = Join-Path $InputDir 'logs'
+$script:LogDirectory = Join-Path $OutputDir 'logs'
 $script:DailyLogFile = Join-Path $script:LogDirectory "$ymd.txt"
 
 function Write-Log {
@@ -30,6 +31,7 @@ function Write-Log {
     $null = New-Item -Path (Split-Path -Path $targetLog -Parent) -ItemType Directory -Force
     Add-Content -Path $targetLog -Value "[$stamp] $Message"
 }
+Write-Log "START ##-by-->  $scriptCaller" 
 
 function Get-Mp3Files {
     param(
@@ -176,6 +178,8 @@ foreach ($file in $mp3Files) {
         
         # 5 trim and delete AND re-EXPORT result.
         & $silencetrim @allParams
+
+         & $spectrum01 @allParams
     }
 }
 

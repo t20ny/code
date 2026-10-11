@@ -17,7 +17,7 @@ if ($OutputCsv -notmatch "sil.csv"){
     $OutputCsv =$OutputCsv -replace ".csv",".sil.csv"
 }
 $baseName = [System.IO.Path]::GetFileNameWithoutExtension($OutputCsv)
-$OutputCsv="$logPath\sil.Csv"
+$OutputCsv="$OutputDir\$logPath\sil.Csv"
 
 # analyze the MP3 audio file
 $ErrorActionPreference = 'Continue'
