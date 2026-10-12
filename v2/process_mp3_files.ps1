@@ -30,6 +30,7 @@ function Write-Log {
     $targetLog = if ($script:LogDirectory) { Join-Path $script:LogDirectory "$ymd.txt" } else { $script:DailyLogFile }
     $null = New-Item -Path (Split-Path -Path $targetLog -Parent) -ItemType Directory -Force
     Add-Content -Path $targetLog -Value "[$stamp] $Message"
+    write-host $Message -ForegroundColor DarkCyan
 }
 Write-Log "START ##-by-->  $scriptCaller" 
 
