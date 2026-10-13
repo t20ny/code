@@ -1,4 +1,4 @@
-<# trim and delete with silence                                              v3.0.3
+<# trim and delete with silence                                              v3.0.5
 -------------------------------------------------------------------------------------
 pre: mp3 input file together with a csv of silence marks. The rows show the time of silence with start end length of the silence.
 Post: output mp3 file trimmed of the loud sections. 
@@ -28,7 +28,7 @@ param (
 
 function dbug{
     param($fun, $val)
-    if ($fun -eq "ipol"){
+    if ($fun -match "ipol"){
     Write-Host "Debug $fun $val" -ForegroundColor DarkCyan
     }
     elseif ($fun -eq "delt"){
@@ -192,7 +192,8 @@ function interpolate{
         else {
             $row | Add-Member -NotePropertyName delete -NotePropertyValue $deleteValue
         }
-        dbug "ipol" $row
+        [int]$minute=$row.pts_time/60
+        dbug "ipol  $minute" $row
     }
     
 
@@ -312,16 +313,16 @@ function interpolate{
             continue
         }
 
-        $runStart = $index
+        $runStart = [double]$data[$index].end
         while ($index -lt $data.Count -and [int]$data[$index].delete -eq 1) {
             $index++
         }
 
-        $startDelete=3
-        $tightenDelete =5
-        $runLength = $index - $runStart
-        $isBorderPulse = ($runStart -lt $startDelete) -or (($data.Count - $index) -lt $endDelete)
-        if ($runLength -lt $tightenDelete -and -not $isBorderPulse) {
+        $endDelete=$data[$index].pts_time
+        $tightenDelete =6 # seconds
+        $runLength = $endDelete - $runStart
+    
+        if ($runLength -lt $tightenDelete ) {
             for ($runIndex = $runStart; $runIndex -lt $index; $runIndex++) {
                 $data[$runIndex].delete = 0
                 $data[$runIndex].delet2 = 0
@@ -460,7 +461,51 @@ function analyze1{
    
 
 
-function setFilter {
+
+function setFilter { # version 1
+    param($data)
+    $thisTime = 1.0
+    $prevTime = 0
+    $deleteRanges = [System.Collections.Generic.List[string]]::new()
+    $sectionStart = 0
+    foreach ($row in $data) {
+         $thisTime = [double]$row.pts_time
+        
+         if ($thisTime -gt 636){
+            write-host $thisTime $row.cat
+         }
+
+
+        if ([int]$row.delete -eq 1) {
+        
+            $deleteRanges.Add([string]::Format(
+                [System.Globalization.CultureInfo]::InvariantCulture,
+                'between(t,{0:R},{1:R})',
+                $prevTime,
+                $thisTime
+            ))
+        }
+       
+        if ([int]$row.delete -eq 0){
+            $sectionStart = [double]$row.end # next delete section will start at end of previous 0 end.
+         }
+        # next section start at thisTime 
+        $prevTime=$thisTime
+    }
+    # audio filter to output new audio file by selecting only the sections with speech.
+    # ffmpeg time-based selectors use t in seconds, not frame indexes n.
+    $deleteExpression = if ($deleteRanges.Count -gt 0) {
+        $deleteRanges -join '+'
+    } else {
+        '0'
+    }
+    $FILTER = "aselect='not($deleteExpression)'"
+    return $FILTER
+}
+
+
+
+function setFilter_v0 {
     param(     $data    )
         $toBeDeleted = $false
         $thisTime = 1.0
@@ -473,17 +518,18 @@ function setFilter {
             $thisTime = [double]$line.pts_time
             $sectionStart = [double]$line.start # start of quiet section.
             $sectionEnd = [double]$line.end     # end   of quiet section
+            $DelStatus = [int]$line.delete
             #$sectionLength = $sectionEnd - $sectionStart
             # Delete between the quiet sections
             # Delete the loud section between the previous section End and this quiet section Start
-            $sectionLength = $sectionEnd - $sectionStart
+            $sectionLength = $sectionEnd -  $prevTime
 
 
             # first 30 seconds of file needs to be deleted, then only keep
             # silence blocks that are long enough to be treated as true delete sections.
-            $isDeleteSection = ($thisTime -gt $startSpeech) -and ($sectionLength -ge $minDeleteSection)
+            $isDeleteSection = ($thisTime -gt $startSpeech) -and ($DelStatus)
 
-            if ($isDeleteSection) {
+         <#   if ($isDeleteSection) {
                 if (-not $toBeDeleted) {
                      $prevTime = $sectionStart
                 }
@@ -493,6 +539,12 @@ function setFilter {
             elseif ($toBeDeleted) {
                 $DelStatus = 1
                 $deleteRanges.Add("between(n,$startblock,$endblock)")
+                $toBeDeleted = $false
+            }
+            #>
+
+            if ($isDeleteSection) {    
+                $deleteRanges.Add("between(n,$PrevTime,$endblock)")
                 $toBeDeleted = $false
             }
 
@@ -575,6 +627,7 @@ $filter = setFilter $newData
 $retryCount = 0
 
 # while ((analyse $newData) -gt $maxPulseCount -and $retryCount -lt 10) {
+<#
 while ((analyze1 $newData) -lt 1 -and $retryCount -lt 4) {
     dbug "f1" "retry analyze1"
     $newData = interpolate $newData
@@ -582,7 +635,7 @@ while ((analyze1 $newData) -lt 1 -and $retryCount -lt 4) {
 
     $retryCount++
 }
-
+#>
 
     # step 9
     trimBlocks $filter
