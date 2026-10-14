@@ -1,4 +1,4 @@
-<# trim and delete with silence                                              v3.0.5
+<# trim and delete with silence                                              v3.0.9
 -------------------------------------------------------------------------------------
 pre: mp3 input file together with a csv of silence marks. The rows show the time of silence with start end length of the silence.
 Post: output mp3 file trimmed of the loud sections. 
@@ -23,19 +23,22 @@ param (
     [string]$SilenceFile = 'sil.csv',
     [string]$OutputPath = 'F:\av\audio\done',    
     [string]$OutputFile = 'new.mp3',
-    [string]$DeleteFile = 'sil.csv' # analysed silence result that show the sections to be deleted
+    [string]$DeleteFile = 'sil.csv', # analysed silence result that show the sections to be deleted
+    $debug=0
 )
-
+$debug=0
 function dbug{
     param($fun, $val)
-    if ($fun -match "ipol"){
-    Write-Host "Debug $fun $val" -ForegroundColor DarkCyan
-    }
-    elseif ($fun -eq "delt"){
-    Write-Host "Debug $fun $val" -ForegroundColor Yellow
-    }
-    else{
-    Write-Host "Debug $fun $val" -ForegroundColor white
+    if ($debug){
+        if ($fun -match "ipol"){
+        Write-Host "Debug $fun $val" -ForegroundColor DarkCyan
+        }
+        elseif ($fun -eq "delt"){
+        Write-Host "Debug $fun $val" -ForegroundColor Yellow
+        }
+        else{
+        Write-Host "Debug $fun $val" -ForegroundColor white
+        }
     }
 }
 
@@ -75,8 +78,17 @@ function dbug{
         $OutputFile
     }
     else {
-        Join-Path $dd $OutputFile
+        Join-Path $OutputPath $OutputFile
     }
+
+    if ([string]::Equals(
+        [System.IO.Path]::GetFullPath($inFile),
+        [System.IO.Path]::GetFullPath($outputPath),
+        [System.StringComparison]::OrdinalIgnoreCase
+    )) {
+        throw "Input and output paths must be different: $inFile"
+    }
+
     $outputDirectory = Split-Path -Parent $outputPath
     if ($outputDirectory) {
         $null = New-Item -ItemType Directory -Path $outputDirectory -Force
@@ -200,16 +212,23 @@ function interpolate{
 
     # step 2
     # start of the file are marked as delete section
-    $strtSectionLength =0
-    for ($index = 0; $index -lt $strtSectionLength; $index++) {
+    $strtSectionSeconds = 30.0
+    $startSectionIndex = 0
+    for ($index = 0; $index -lt $data.Count; $index++) {
+     
         $data[$index].delete = 1
         $data[$index].delet2 = 1
         $data[$index].cat = "ip1start"
+        $startSectionIndex = $index + 1
+
+        if ([double]$data[$index].pts_time -gt $strtSectionSeconds) {
+            break
+        }
     }
 
     # step 3
     # clear short noise bursts before filling short gaps between real delete runs
-    for ($index = $strtSectionLength; $index -lt $data.Count;) {
+    for ($index = $startSectionIndex; $index -lt $data.Count;) {
         if ([int]$data[$index].delete -eq 0) {
             $index++
             continue
@@ -225,7 +244,7 @@ function interpolate{
 
     # step 4
     # Fill short speech gaps only when they are bounded by retained delete runs.
-    for ($index = $strtSectionLength; $index -lt $data.Count;) {
+    for ($index = $startSectionIndex; $index -lt $data.Count;) {
         if ([int]$data[$index].delete -eq 1) {
             $index++
             continue
@@ -251,7 +270,7 @@ function interpolate{
 
     # step 5
     # Remove short delete runs after the speech-gap fill.
-    for ($index = $strtSectionLength; $index -lt $data.Count;) {
+    for ($index = $startSectionIndex; $index -lt $data.Count;) {
         if ([int]$data[$index].delete -eq 0) {
             $index++
             continue
@@ -274,8 +293,8 @@ function interpolate{
 
     # step 6
     # pad before valid delete sections so they remain coherent blocks
-    $prepadEnd = $strtSectionLength
-    for ($index = $strtSectionLength; $index -lt $data.Count;) {
+    $prepadEnd = $startSectionIndex
+    for ($index = $startSectionIndex; $index -lt $data.Count;) {
         if ([int]$data[$index].delete -ne 1) {
             $index++
             continue
@@ -307,23 +326,29 @@ function interpolate{
     }
 
     # step 8 - tighten: clear short noise bursts that do not belong to a real pulse block.
-    for ($index = 0; $index -lt $data.Count;) {
+    for ($index =  $startSectionIndex; $index -lt $data.Count;) {
         if ([int]$data[$index].delete -eq 0) {
             $index++
             continue
         }
 
-        $runStart = [double]$data[$index].end
+        $runStartIndex = $index
+        $runStartTime = [double]$data[$index].end
         while ($index -lt $data.Count -and [int]$data[$index].delete -eq 1) {
             $index++
         }
 
-        $endDelete=$data[$index].pts_time
+        dbug "ipol" $index
+        if (($data.Count - $index) -lt $endSectionLength) {
+            continue
+        }
+
+        $runEndTime = [double]$data[$index].pts_time
         $tightenDelete =6 # seconds
-        $runLength = $endDelete - $runStart
+        $runLength = $runEndTime - $runStartTime
     
         if ($runLength -lt $tightenDelete ) {
-            for ($runIndex = $runStart; $runIndex -lt $index; $runIndex++) {
+            for ($runIndex = $runStartIndex; $runIndex -lt $index; $runIndex++) {
                 $data[$runIndex].delete = 0
                 $data[$runIndex].delet2 = 0
                 $data[$runIndex].cat = "ip8tighten"
@@ -467,16 +492,19 @@ function setFilter { # version 1
     $thisTime = 1.0
     $prevTime = 0
     $deleteRanges = [System.Collections.Generic.List[string]]::new()
+    $trimSections = [System.Collections.Generic.List[object]]::new()
+    $trimSectionStart = $null
+    $trimSectionEnd = $null
     $sectionStart = 0
     foreach ($row in $data) {
          $thisTime = [double]$row.pts_time
         
-         if ($thisTime -gt 636){
-            write-host $thisTime $row.cat
-         }
-
-
         if ([int]$row.delete -eq 1) {
+
+            if ($null -eq $trimSectionStart) {
+                $trimSectionStart = $prevTime
+            }
+            $trimSectionEnd = $thisTime
         
             $deleteRanges.Add([string]::Format(
                 [System.Globalization.CultureInfo]::InvariantCulture,
@@ -485,6 +513,14 @@ function setFilter { # version 1
                 $thisTime
             ))
         }
+        elseif ($null -ne $trimSectionStart) {
+            $trimSections.Add([pscustomobject]@{
+                Start = [double]$trimSectionStart
+                End = [double]$trimSectionEnd
+            })
+            $trimSectionStart = $null
+            $trimSectionEnd = $null
+        }
        
         if ([int]$row.delete -eq 0){
             $sectionStart = [double]$row.end # next delete section will start at end of previous 0 end.
@@ -492,6 +528,56 @@ function setFilter { # version 1
         # next section start at thisTime 
         $prevTime=$thisTime
     }
+
+    if ($null -ne $trimSectionStart) {
+        $trimSections.Add([pscustomobject]@{
+            Start = [double]$trimSectionStart
+            End = [double]$trimSectionEnd
+        })
+    }
+
+    Write-Host "Trimmed duration by minute (seconds):"
+    if ($trimSections.Count -eq 0) {
+        Write-Host "No trim sections found."
+    }
+    else {
+        $trimSecondsByMinute = @{}
+        $sectionCountByMinute = @{}
+        foreach ($section in $trimSections) {
+            $minute = [int][Math]::Floor($section.Start / 60)
+            if (-not $sectionCountByMinute.ContainsKey($minute)) {
+                $sectionCountByMinute[$minute] = 0
+            }
+            $sectionCountByMinute[$minute]++
+
+            $cursor = [double]$section.Start
+            while ($cursor -lt $section.End) {
+                $minute = [int][Math]::Floor($cursor / 60)
+                $minuteEnd = ($minute + 1) * 60
+                $portionEnd = [Math]::Min([double]$section.End, [double]$minuteEnd)
+                $seconds = $portionEnd - $cursor
+                if (-not $trimSecondsByMinute.ContainsKey($minute)) {
+                    $trimSecondsByMinute[$minute] = 0.0
+                }
+                $trimSecondsByMinute[$minute] += $seconds
+                $cursor = $portionEnd
+            }
+        }
+
+        $maxSeconds = ($trimSecondsByMinute.Values | Measure-Object -Maximum).Maximum
+        foreach ($minute in ($trimSecondsByMinute.Keys | Sort-Object { [int]$_ })) {
+            $trimSeconds = [double]$trimSecondsByMinute[$minute]
+            $sectionCount = if ($sectionCountByMinute.ContainsKey($minute)) {
+                $sectionCountByMinute[$minute]
+            } else {
+                0
+            }
+            $barLength = [Math]::Max(1, [int][Math]::Round(40 * $trimSeconds / $maxSeconds))
+            $bar = '#' * $barLength
+            Write-Host ("Minute {0,3}: {1,7:N0}s trimmed, {2,3} sections {3}" -f $minute, $trimSeconds, $sectionCount, $bar)
+        }
+    }
+
     # audio filter to output new audio file by selecting only the sections with speech.
     # ffmpeg time-based selectors use t in seconds, not frame indexes n.
     $deleteExpression = if ($deleteRanges.Count -gt 0) {
