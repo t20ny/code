@@ -69,10 +69,12 @@ function New-AudioFilter {
 
     $audioFilter = @(
       #  $BaseFilter,
-        'equalizer=f=6000:width_type=h:width=2000:g=-6',
-        'equalizer=f=8000:width_type=h:width=2000:g=-6',
-        'equalizer=f=10000:width_type=h:width=2000:g=-10',
-        'equalizer=f=15000:width_type=h:width=3000:g=-15'
+        'equalizer=f=2000:width_type=h:width=2000:g=-16',
+        'equalizer=f=4000:width_type=h:width=2000:g=-26',
+        'equalizer=f=6000:width_type=h:width=2000:g=-26',
+        'equalizer=f=8000:width_type=h:width=2000:g=-26',
+        'equalizer=f=10000:width_type=h:width=2000:g=-25',
+        'equalizer=f=15000:width_type=h:width=3000:g=-25'
     ) -join ','
 
     return $audioFilter
@@ -115,7 +117,7 @@ function trimBlocks {
     $previousErrorPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        & $ffmpegPath @args 2> "$logName" | Out-Null
+        & $ffmpegPath @args #2> "$logName" | Out-Null
     }
     finally {
         $ErrorActionPreference = $previousErrorPreference

@@ -572,10 +572,10 @@ function New-AudioFilter {
 
     $audioFilter = @(
         $BaseFilter,
-        'equalizer=f=6000:width_type=h:width=2000:g=-6',
-        'equalizer=f=8000:width_type=h:width=2000:g=-6',
-        'equalizer=f=10000:width_type=h:width=2000:g=-10',
-        'equalizer=f=15000:width_type=h:width=3000:g=-15'
+        'equalizer=f=900:width_type=h:width=200:g=-6',
+        'equalizer=f=1500:width_type=h:width=1000:g=-9',
+        'equalizer=f=6000:width_type=h:width=8000:g=-18',
+        'equalizer=f=15000:width_type=h:width=10000:g=-27'
     ) -join ','
 
     return $audioFilter
