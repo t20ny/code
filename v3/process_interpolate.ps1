@@ -20,6 +20,7 @@ param (
     [string]$OutputLog = 'logs'
 
 )
+write-host $PSCommandPath -BackgroundColor cyan
    $logsDir="$outputDir\$logPath"
     $framesPerSecond = 38
     $minGap       = $framesPerSecond * 5   # if two delete sections are only 4 seconds apart, fill the gap to keep a single pulse block

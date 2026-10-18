@@ -12,12 +12,15 @@ param(
     $debug=0,
     [switch]$Latest 
 )
+write-host $PSCommandPath -BackgroundColor cyan
 $scriptRoot = $PSScriptRoot
 $scriptCaller = $$
 Set-Location -LiteralPath $scriptRoot
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+write-host "InputDir  $InputDir " -ForegroundColor Yellow
+$InputPath = $InputDir
 
 $dts = (Get-Date).ToString('yyyyMMdd.HHmmss')
 $ymd = (Get-Date).ToString('yyyyMMdd')
@@ -109,12 +112,13 @@ foreach ($file in $mp3Files) {
     $ErrorActionPreference = 'Continue'
     try {
         write-host "#=#=#=#== probe ==#== $baseName ===== ===== =#=" -ForegroundColor blue
-        $probeResult = & ffprobe @probeArgs 2>$null
+        [int]$probeResult = & ffprobe @probeArgs 2>$null
     }
     finally {
         $ErrorActionPreference = $prevErrorPreference
     }
-    if (-not $probeResult -or ($probeResult).Length -eq 0) {
+  #  if (-not $probeResult -or ($probeResult).Length -eq 0) {
+    if (-not $probeResult ) {
         Write-Log "Skipping unreadable or invalid file: $($file.FullName)"
         continue
     }
@@ -135,6 +139,7 @@ foreach ($file in $mp3Files) {
 
     $allParams = @{
         inputDir  = $InputDir
+        inputPath  = $InputPath
         logPath   = $outLogDir
         InputFile = $file.Name
         OutputCsv = "$baseName.csv"

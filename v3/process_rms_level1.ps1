@@ -1,9 +1,10 @@
-<# process RMS                                                          v2.1.0
+<# process RMS                                                          v2.1.1
 -------------------------------------------------------------------------------------
     get RMS data points, analyse, mark delete sections                 
 #>
 param(
     [string]$inputDir = 'F:\av\audio\downloads',
+    [string]$inputPath ="F:\av\audio\downloads",
     [string]$OutputDir = 'F:\av\audio\done',
     [string]$logPath = 'F:\av\audio\done\logs',    
     [string]$InputFile = 'source.mp3', 
@@ -11,7 +12,7 @@ param(
     $debug=1
 )
 
-
+write-host $PSCommandPath -BackgroundColor cyan
 [int]$attemps=1
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -21,6 +22,9 @@ if ($OutputCsv -notmatch "rms"){
     $OutputCsv =$OutputCsv -replace ".csv",".rms.csv"
 }
 $LogDir=$logpath
+#$ExportFile="$inputDir\$OutputCsv"
+$ExportFile="$inputPath\$OutputCsv"
+if ($debug) {write-host "ExportFile  $ExportFile " -ForegroundColor Yellow}
 
 $speechLvl=-60   # if rms level below Lvl then this window is speech   v1=-60
 $windowSize=200  # Theil–Sen regression window 38 frames per second so v1=200 about 5 seconds
@@ -96,25 +100,17 @@ function analyzeRMS {
         [string]$OutputCsv
     )
     
-#v3  $tsAvg=0
-#v3  $tsMed=0.005 # Theil–Sen gradient Median
-#v3  $tsMin=0
-#v3  $tsMax=1
     $spMin=0 # sound pressure mininum
     $spAvg=0
 
-#v3 $TSWindow = [System.Collections.Generic.Queue[double]]::new()
     $spWindow = [System.Collections.Generic.Queue[double]]::new()
-#v3 $TSAvW = [System.Collections.Generic.Queue[double]]::new()
     $category="commercial"
     $pdct1 = 1      # predict commercial is true=1   
-#v3 $threshold=27   # if rms average of TSwindow is below threshold  v1=23
 
     $result = [System.Collections.Generic.List[object]]::new()
     $thisFrame = 0
     $pts = '0'
     $ptsTime = '0'
-#v3 $rmsprev=0
 
     if ($debug){  # write-host "fName      $fName"
         write-host "reading =  $logName"
@@ -140,29 +136,21 @@ function analyzeRMS {
                     $rmsValue = 0.0
                     }
                $absRms = [math]::Abs($rmsValue)
-    #v3            $diff=[double]($rmsprev - $rmsValue) # gradient is delta between two consecutive y points 
-                # $category = if ($absRms -lt $threshold) { 'loud' } else { 'quiet' }
-                
+          
                 $result.Add([PSCustomObject]@{
                     Frame = $thisFrame
                     pts = $pts
                     pts_time = $ptsTime
                     RMS = $rmsText
                    rmsa = $absRms
-    #v3                dif= $diff
-    #v3                tsA=$tsAvg
-   #v3                 tsM=$tsMed
                     delete=$pdct1
                     cat = $category
                     delet2=[int]$pdct1
                     minute=[int]($ptsTime/60)
-    #v3             tsM1=$tsMin
-    #v3             tsM2=$tsMax
                     spMin=$spMin
                     spAvg=$spAvg
                 })
-    #v3         $rmsprev=$rmsValue
-                
+        
                  # IF dB window less than -mininum db threshold then speech
                 $spWindow.Enqueue($rmsValue)
                 if ($spWindow.Count -gt $windowSize) {
@@ -170,13 +158,6 @@ function analyzeRMS {
                 }
                 $spMin = ($spWindow | Measure-Object -Minimum).Minimum
                 $spAvg = ($spWindow | Measure-Object -Average).Average
-                # regression analysis of the gradient deltas
-    #v3         $tsWindow.Enqueue([math]::Abs($diff))   # absolute values of the gradients
-    #v3         if ($tsWindow.Count -gt $windowSize) {    $null = $tsWindow.Dequeue()    }
-    #v3         $tsAvg = ($tsWindow | Measure-Object -Average).Average
-    #v3         $tsMin = ($TSWindow | Measure-Object -Minimum).Minimum
-    #v3         $tsMax = ($TSWindow | Measure-Object -Maximum).Maximum
-    #v3         $tsMed = ([double]$tsMin + [double]$tsMax)/2
      
                 # prediction 1
                 $pdct1 = if ($spMin -lt $speechLvl) { 0 } 
@@ -199,11 +180,12 @@ function analyzeRMS {
     # if ($debug) {$result | Format-Table -Property Frame, RMS, rmsa, dif, tsA, tsM, pts, pts_time,delete ,cat -AutoSize}
 
     # export to csv
-    $ExportFile="$inputDir\$OutputCsv"
+   # $ExportFile="$inputDir\$OutputCsv"
+   write-host "ExportFile  $ExportFile " -ForegroundColor Yellow
     $result | Export-Csv -LiteralPath $ExportFile -NoTypeInformation
     Copy-Item $ExportFile "$LogDir\rms.csv" # copy for spectrum.xlsx visualisations
     Write-Host "Exported=  $ExportFile"
-    Write-Host "copied-->  $LogDir\rms.csv"
+    Write-Host "copied-->  $LogDir\rms.csv" -ForegroundColor cyan
 
     # Show the sum of delet2 values for each minute 
     if ($debug) {
@@ -267,15 +249,21 @@ function analyzeRMS {
 if (-not $InputFile) {
     throw "A file path is required to analyze RMS levels."
 }
+else {
+    write-host "InputFile: $InputFile" -ForegroundColor Yellow
+}
 
+<#
 $inputPath = if ([System.IO.Path]::IsPathRooted($InputFile)) {
     $InputFile
 } else {
     Join-Path $inputDir $InputFile
 }
 
-if (-not (Test-Path -LiteralPath $inputPath -PathType Leaf)) {
-    throw "Input file not found= $inputPath"
+  $ExportFile="$inputDir\$OutputCsv"
+ #> 
+if (-not (Test-Path -LiteralPath "$InputFile" -PathType Leaf)) {
+    throw "Input file not found= $InputFile"
 }
 
 $logDir = if ([System.IO.Path]::IsPathRooted($logPath)) {
@@ -284,12 +272,12 @@ $logDir = if ([System.IO.Path]::IsPathRooted($logPath)) {
     Join-Path $inputDir $logPath
 }
 $null = New-Item -ItemType Directory -Path $logDir -Force
-$baseName = [System.IO.Path]::GetFileNameWithoutExtension($inputPath)
+$baseName = [System.IO.Path]::GetFileNameWithoutExtension("$InputFile")
 $logName = Join-Path $logDir ("{0}.rms.log" -f $baseName)
 $logFileName = Split-Path -Leaf $logName
 
 Write-Host "========= analyze RMS       ==============================================" -foregroundColor Blue
-if ($debug){Write-Host "analyze RMS  $inputPath   `n-analyzeLog  $logName " -BackgroundColor Blue
+if ($debug){Write-Host "analyze RMS  $InputFile   `n-analyzeLog  $logName " -foregroundColor Blue
             #Remove-Item $inputPath 
             if (test-path $logFileName){Remove-Item $logFileName}
 }
@@ -300,7 +288,8 @@ try {
   }
   else {
     Write-Host "[1]====== get RMS  "
-    getRMS -fName $inputPath -logName $logFileName
+  # getRMS -fName $inputPath -logName $logFileName
+    getRMS -fName $InputFile -logName $logFileName
   }
 }
 finally {

@@ -12,7 +12,7 @@ param (
     [string]$OutputFile = 'USSEL2.mp3'
 )
 
-
+write-host $PSCommandPath -BackgroundColor cyan
     Set-Location -LiteralPath $dd
     $logname = Join-Path $logPath 'delete.log'
     $ErrorActionPreference = 'Continue'

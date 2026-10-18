@@ -14,7 +14,7 @@ param (
     [string]$OutputPath = 'F:\av\audio\done',    
     [string]$OutputFile = 'new.mp3'
 )
-
+write-host $PSCommandPath -BackgroundColor cyan
     $logname = Join-Path $logPath 'spectrum.log'
     $startFrame = 0
     $deleteRanges = [System.Collections.Generic.List[string]]::new()
@@ -32,10 +32,13 @@ param (
     }
   
    function getRMS{
-    param( [string]$fName)
+    param( [string]$fName) # fullname
          $rmsScript = Join-Path $psscriptRoot 'process_rms_level1.ps1'
          # H:\data\dev\ai\audio\code\v2
-         & $rmsScript # -inputDir $InputDir -logPath $outLogDir -InputFile $fName -OutputCsv $RmsFile
+         $InputDir=$inputPath
+         if ($debug) {write-host "-inputDir $InputDir `n-logPath $outLogDir `n-InputFile $fName `n-OutputCsv $RmsFile" -ForegroundColor Yellow}
+         & $rmsScript -inputDir $InputDir -logPath $outLogDir -InputFile $fName -OutputCsv $RmsFile
+         #& $rmsScript -inputDir $InputDir -inputPath $inputPath -logPath $outLogDir -InputFile $fName -OutputCsv $RmsFile
    }
     
     try {

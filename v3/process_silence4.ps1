@@ -10,7 +10,7 @@ param(
     [string]$OutputCsv = "sil.csv",
     $debug=0
 )
-
+write-host $PSCommandPath -BackgroundColor cyan
 Set-Location $InputDir
 #& $silenceScript -dd $InputDir -logPath $silenceLog -InputFile $file.FullName -OutputLog "$baseName.sil.log"
 if ($OutputCsv -notmatch "sil.csv"){
