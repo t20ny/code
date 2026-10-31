@@ -25,7 +25,8 @@ $InputPath = $InputDir
 $dts = (Get-Date).ToString('yyyyMMdd.HHmmss')
 $ymd = (Get-Date).ToString('yyyyMMdd')
 $script:LogDirectory = Join-Path $OutputDir 'logs'
-$script:DailyLogFile = Join-Path $script:LogDirectory "$ymd.txt"
+$script:DailyLogFile = Join-Path $script:LogDirectory "_process_mp3_$ymd.txt"
+
 
 function Write-Log {
     param([string]$Message)
@@ -37,33 +38,28 @@ function Write-Log {
 }
 Write-Log "START ##-by-->  $scriptCaller" 
 
+
 function Get-Mp3Files {
     param(
         [string]$Directory,
         [switch]$NewestOnly
     )
-
     $files = @(Get-ChildItem -Path $Directory -File -Filter '*.mp3' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime )
-    
     if ($NewestOnly) {
         if ($files.Count -eq 0) { return @() }
         return @($files | Select-Object -Last 1)
     }
-
     return @($files)
 }
 
 
 # MAIN ##################################
-
 if (-not (Test-Path -LiteralPath $InputDir -PathType Container)) {
     throw "Input directory not found: $InputDir"
 }
-
 if (-not $OutputDir) {
     $OutputDir = Join-Path $InputDir 'processed'
 }
-
 $null = New-Item -Path $OutputDir -ItemType Directory -Force
 $logDir = Join-Path $OutputDir 'logs'
 $null = New-Item -Path $logDir -ItemType Directory -Force
@@ -83,13 +79,11 @@ if ($fileArray.Count -gt 0) {
             if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
                 throw "MP3 file not found: $path"
             }
-
             Get-Item -LiteralPath $path
         }
     )
 }
 else {
-    # $mp3Files = @(Get-Mp3Files -Directory $InputDir -NewestOnly:$Latest)
    $mp3Files = @(Get-Mp3Files -Directory $InputDir -NewestOnly $Latest)
 }
 
@@ -99,9 +93,6 @@ if ($mp3Files.Count -eq 0) {
 
 foreach ($file in $mp3Files) {
     $baseName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
-   # $outputFile = Join-Path $OutputDir ("{0}_cleaned.mp3" -f $baseName)
-    #$silenceLog = Join-Path $logDir ("{0}_silence.log" -f $baseName)
-    #$auditLog = Join-Path $logDir ("{0}.log" -f $baseName)
 
     Write-Log "Inspecting: $($file.FullName)"
     if ($file.Name -notmatch "source.mp3"){ 
@@ -147,28 +138,22 @@ foreach ($file in $mp3Files) {
         DeleteFile = $deleteFile
         OutputPath= $OutputDir
         OutputFile = "$baseName.mp3"
-        SilenceFile = 'sil.csv'
-        RmsFile = 'RMS.csv'
+        SilenceFile = '_sil.csv'
+        RmsFile = '_RMS.csv'
         debug=$debug
     }
     
     if ($debug){ # FULL RMS ANALYSIS and PROCESSING Trim #
         # 1 RMS
         & $rmsScript @allParams
-        # & $rmsScript -inputDir $InputDir -logPath $outLogDir -InputFile $file.FullName -OutputCsv "$baseName.csv"
 
-    
         # 2 process silence 
-        & $silenceScript @allParams
-        # & $silenceScript -inputDir $InputDir -logPath $silenceLog -InputFile $file.FullName -OutputLog "$baseName.sil.log" -OutputCsv "$baseName.sil.csv"
-        
+        & $silenceScript @allParams    
         
         # 3  interpolate 
-        #& $inpScript -inputdir $InputDir -logPath $outLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $deleteFile
         & $inpScript @allParams
 
         # 4  spectrum alternate processing option
-        #  & $spectrum01 -inputpath $inputDir -logPath "$outputDir\Logs" -InputFile $file.FullName -rmsFile "rms.csv" -SilenceFile "sil.csv" -OutputPath $OutputDir -OutputFile "new.mp3" -dd $dd
         & $spectrum01 @allParams
 
         # 5 trim and delete AND re-EXPORT result.
@@ -180,12 +165,11 @@ foreach ($file in $mp3Files) {
 
         # 2 process silence 
         & $silenceScript @allParams
-        # & $silenceScript -inputDir $InputDir -logPath $silenceLog -InputFile $file.FullName -OutputLog "$baseName.sil.log" -OutputCsv "$baseName.sil.csv"
         
         # 5 trim and delete AND re-EXPORT result.
         & $silencetrim @allParams
 
-         & $spectrum01 @allParams
+        & $spectrum01 @allParams
     }
 }
 

@@ -3,12 +3,12 @@
 #>
 param(
     [string]$InputDir="F:\av\audio\downloads",
-    [string]$InputFile="source.mp3",
+    [string]$InputFile="_source.mp3",
     [string]$logPath= 'logs',    
     [string]$OutputDir = 'F:\av\audio\done',
-    [string]$OutputLog="silence.log",
-    [string]$OutputCsv = "sil.csv",
-    $debug=0
+    [string]$OutputLog="_silence.log",
+    [string]$OutputCsv = "_sil.csv",
+    $debug=1
 )
 write-host $PSCommandPath -BackgroundColor cyan
 Set-Location $InputDir
@@ -17,7 +17,7 @@ if ($OutputCsv -notmatch "sil.csv"){
     $OutputCsv =$OutputCsv -replace ".csv",".sil.csv"
 }
 $baseName = [System.IO.Path]::GetFileNameWithoutExtension($OutputCsv)
-$OutputCsv="$OutputDir\logs\sil.Csv"
+$OutputCsv="$OutputDir\logs\_sil.Csv"
 
 # analyze the MP3 audio file
 $ErrorActionPreference = 'Continue'
@@ -75,21 +75,7 @@ function AnalyzeSilence {
         throw "Input file not found: $fName"
     }
 
-    $logDirectory = Split-Path -Parent $logName
-    if ($logDirectory) {
-        $null = New-Item -ItemType Directory -Path $logDirectory -Force
-    }
-
-      if (-not $logName) {
-        $logName = [System.IO.Path]::ChangeExtension("$fName", '.Silence.log')
-    }
-
-    if (-not $OutputCsv) {
-        $OutputCsv = [System.IO.Path]::ChangeExtension("$fName", '.Silence.csv')
-    }
-
-
-   # process results from the analysis log and categorize silence segments
+     # process results from the analysis log and categorize silence segments
     $result = [System.Collections.Generic.List[object]]::new()
     $currentFrame = 0
     $currentPts = $null
@@ -99,6 +85,28 @@ function AnalyzeSilence {
     $speechDuration = 0.0
     $category = 'none'
     $delete=1
+
+
+    $logDirectory = Split-Path -Parent $logName
+    if ($logDirectory) {
+        $null = New-Item -ItemType Directory -Path $logDirectory -Force
+    }
+
+      if (-not $logName) {
+        $logName = [System.IO.Path]::ChangeExtension("$fName", '.Silence.log')
+    }
+
+    if (Test-Path $logName){
+        # log ok
+    }
+    else {
+        write-host "missing expected log $logname" -ForegroundColor Yellow
+    }
+
+    if (-not $OutputCsv) {
+        $OutputCsv = [System.IO.Path]::ChangeExtension("$fName", '.Silence.csv')
+    }
+  
     foreach ($line in Get-Content -LiteralPath $logName) {
         if ($line -match '^frame:(?<frame>\d+)\s+pts:(?<pts>\S+)\s+pts_time:(?<ptsTime>\S+)') {
             $currentFrame = [int]$matches.frame

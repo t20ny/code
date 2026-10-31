@@ -1,4 +1,4 @@
-<# process RMS                                                          v2.1.1
+<# process RMS                                                          v2.1.3
 -------------------------------------------------------------------------------------
     get RMS data points, analyse, mark delete sections                 
 #>
@@ -7,24 +7,17 @@ param(
     [string]$inputPath ="F:\av\audio\downloads",
     [string]$OutputDir = 'F:\av\audio\done',
     [string]$logPath = 'F:\av\audio\done\logs',    
-    [string]$InputFile = 'source.mp3', 
-    [string]$OutputCsv = 'rms.csv',
-    $debug=1
+    [string]$InputFile = '_source.mp3', 
+    [string]$OutputCsv = '_rms.csv',
+    $debug=0
 )
-
+#Set-Location $inputDir
 write-host $PSCommandPath -BackgroundColor cyan
-[int]$attemps=1
+[int]$attemps=2
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-$logName="process_rms.log"
+$logName="_process_rms.log"
 
-if ($OutputCsv -notmatch "rms"){
-    $OutputCsv =$OutputCsv -replace ".csv",".rms.csv"
-}
-$LogDir=$logpath
-#$ExportFile="$inputDir\$OutputCsv"
-$ExportFile="$inputPath\$OutputCsv"
-if ($debug) {write-host "ExportFile  $ExportFile " -ForegroundColor Yellow}
 
 $speechLvl=-60   # if rms level below Lvl then this window is speech   v1=-60
 $windowSize=200  # Theil–Sen regression window 38 frames per second so v1=200 about 5 seconds
@@ -43,24 +36,21 @@ function getRMS {
     write-host "fName   =  $fName"
     # write-host "get RMS $logName"
    # FILTER REF https://ffmpeg.org/ffmpeg-filters.html#Filtergraph-syntax-1
-   # https://ffmpeg-cookbook.com/en/articles/astats/
+
+# https://ffmpeg-cookbook.com/en/articles/astats/
+# metadata=1   astats attaches its statistics to every audio frame
+# reset=N      clears the statistics every N frames, not every N samples. (A decoded AAC frame holds 1024 samples.
+#  "asetnsamples=n=44100,astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level:file=-"
+
    # a
   # $a0= 'ffmpeg -i input.mp4 -af "astats=measure_perchannel=RMS_level+Peak_level:measure_overall=RMS_level+Peak_level" -f null /dev/null'
    #  with metadata=1, astats attaches its statistics to every audio frame as metadata. Each value covers the audio from the start up to that frame;
    #  use reset to get values for shorter intervals. The ametadata filter prints the values:
-  # $a1='ffmpeg -i input.mp4 -af "astats=metadata=1,ametadata=print:file=-" -f null /dev/null 2>&1 | head -50'
-   # Segment-by-Segment Statistics (reset Parameter)
-   #$a2='ffmpeg -i input.mp4 -af "asetnsamples=n=44100,astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level:file=-" -f null /dev/null'
-
-
-
-    # 2 
-   #$filter = "astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level"
-   $FILTER= "astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level:file=$logName" #  verbose file output
-   #$FILTER= "astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level+RMS_difference+Mean_difference" 
-
-
-
+     # Segment-by-Segment Statistics (reset Parameter)
+   $filter = "asetnsamples=n=8192,astats=metadata=1:reset=1,"
+# $filter = "astats=metadata=1:reset=1,"
+   $FILTER+= "ametadata=print:key=lavfi.astats.Overall.RMS_level:file=$logName" #  verbose file output
+  
     $args4 = @(
         '-hide_banner',
         '-i', $fName,
@@ -177,18 +167,18 @@ function analyzeRMS {
     }
 
     # show the Frame and RMS levels in a table
-    # if ($debug) {$result | Format-Table -Property Frame, RMS, rmsa, dif, tsA, tsM, pts, pts_time,delete ,cat -AutoSize}
+    if ($debug) {$result | Format-Table #-Property Frame, RMS, rmsa, dif, tsA, tsM, pts, pts_time,delete ,cat -AutoSize
+        }
 
     # export to csv
-   # $ExportFile="$inputDir\$OutputCsv"
-   write-host "ExportFile  $ExportFile " -ForegroundColor Yellow
     $result | Export-Csv -LiteralPath $ExportFile -NoTypeInformation
     Copy-Item $ExportFile "$LogDir\rms.csv" # copy for spectrum.xlsx visualisations
     Write-Host "Exported=  $ExportFile"
     Write-Host "copied-->  $LogDir\rms.csv" -ForegroundColor cyan
 
     # Show the sum of delet2 values for each minute 
-    if ($debug) {
+    $doAgain=0
+    if ($debug -eq 0) {
         $minuteHistogram = @(
             $result |
             Group-Object -Property minute |
@@ -210,10 +200,12 @@ function analyzeRMS {
             } |
             Sort-Object -Property minute
         )
-
+        if ($debug -eq 0){ # show histogram rows where $commercialFrames gt 0
         $minuteHistogram |
+            Where-Object { $_.commercial -gt 10 } |
             Format-Table -Property minute, frames, commercial, percent, histogram -AutoSize |
-            Out-Host
+            Out-Host 
+        }
 
         $totalFrames = ($minuteHistogram | Measure-Object -Property frames -Sum).Sum
         $totalCommercial = ($minuteHistogram | Measure-Object -Property commercial -Sum).Sum
@@ -227,45 +219,54 @@ function analyzeRMS {
         if ($overallPercent -ge 70) {
             $conclusion = 'The recording is predominantly predicted commercial. Recommend +10db change on speech level threshold and retry'
             $script:speechLvl = $speechLvl + 10
-            $attemps = 1
+            $doAgain = 1
         } elseif ($overallPercent -le 30) {
             $conclusion = 'The recording is predominantly predicted speech.'
         } else {
             $conclusion = 'The recording is mixed; inspect the minute boundaries before trimming. Recommend changes +10db on speech level threshold and +40 on regression window size and then retry'
             $script:speechLvl = $speechLvl + 10
             $script:windowSize = $windowSize + 40
-            $attemps = 1
+            $doAgain = 1
         }
 
         Write-Host ('Summary= {0} analyzed minutes, {1} commercial, {2} speech.' -f $minuteHistogram.Count, $commercialMinutes, $speechMinutes)
         Write-Host ('Overall commercial score= {0}% ({1}/{2} frames).' -f $overallPercent, $totalCommercial, $totalFrames)
         Write-Host "Conclusion= $conclusion"
-
+        $doAgain
     }
-    return [int]$attemps
+    $Script:attemps=$doAgain
 }
 
 
+# MAIN ###################################################
+# input file ---------------------------------------
 if (-not $InputFile) {
     throw "A file path is required to analyze RMS levels."
 }
 else {
     write-host "InputFile: $InputFile" -ForegroundColor Yellow
 }
-
-<#
-$inputPath = if ([System.IO.Path]::IsPathRooted($InputFile)) {
-    $InputFile
-} else {
-    Join-Path $inputDir $InputFile
-}
-
-  $ExportFile="$inputDir\$OutputCsv"
- #> 
 if (-not (Test-Path -LiteralPath "$InputFile" -PathType Leaf)) {
     throw "Input file not found= $InputFile"
 }
+if (-not $InputPath) {
+    $inputPath = if ([System.IO.Path]::IsPathRooted($InputFile)) {
+        $InputFile
+    } else {
+        Join-Path $inputDir $InputFile
+    }
+}
 
+# output file ---------------------------------------
+if ($OutputCsv -notmatch "rms"){
+    $OutputCsv =$OutputCsv -replace ".csv",".rms.csv"
+}
+#$ExportFile="$inputDir\$OutputCsv"
+$ExportFile="$inputPath\$OutputCsv"
+if ($debug) {}
+
+# log file ---------------------------------------
+$LogDir=$logpath
 $logDir = if ([System.IO.Path]::IsPathRooted($logPath)) {
     $logPath
 } else {
@@ -274,22 +275,24 @@ $logDir = if ([System.IO.Path]::IsPathRooted($logPath)) {
 $null = New-Item -ItemType Directory -Path $logDir -Force
 $baseName = [System.IO.Path]::GetFileNameWithoutExtension("$InputFile")
 $logName = Join-Path $logDir ("{0}.rms.log" -f $baseName)
-$logFileName = Split-Path -Leaf $logName
+$RMSlog = Split-Path -Leaf $logName
+Push-Location -LiteralPath $logDir
 
 Write-Host "========= analyze RMS       ==============================================" -foregroundColor Blue
 if ($debug){Write-Host "analyze RMS  $InputFile   `n-analyzeLog  $logName " -foregroundColor Blue
             #Remove-Item $inputPath 
-            if (test-path $logFileName){Remove-Item $logFileName}
+            if (test-path $RMSlog){Remove-Item $RMSlog}
+            write-host "ExportFile $ExportFile " -ForegroundColor Yellow
 }
-Push-Location -LiteralPath $logDir
+
 try {
-  if (test-path $logFileName){
-    Write-Host "[1]====== Use the existing RMS log  $logFileName " -foregroundcolor yellow
+  if (test-path $RMSlog){
+    Write-Host "[1]==== = Use the existing RMS log  $RMSlog " -foregroundcolor yellow
   }
   else {
-    Write-Host "[1]====== get RMS  "
-  # getRMS -fName $inputPath -logName $logFileName
-    getRMS -fName $InputFile -logName $logFileName
+    Write-Host "[1]==== = get RMS  "
+  # getRMS -fName $inputPath -logName $RMSlog
+    getRMS -fName $InputFile -logName $RMSlog
   }
 }
 finally {
@@ -298,8 +301,12 @@ finally {
 
 while ($attemps -ge 1) {
     $attemps--
-    Write-Host "[2]====== analysing the data ...  "
-    $attemps = [int](analyzeRMS -fName $inputPath -logName $logName -OutputCsv $OutputCsv)
+    Write-Host "[2]==== = analysing the data ($attemps attemps)  "
+    try {
+     analyzeRMS -fName $inputPath -logName $logName -OutputCsv $OutputCsv
+    }
+    catch {
+        $error[0]
+    }
     if ($speechLvl -ge -30){exit}
 }
-

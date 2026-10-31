@@ -13,10 +13,10 @@ param (
     [string]$inputDir = 'F:\av\audio\done',
     [string]$OutputDir = 'F:\av\audio\done',
     [string]$logPath = 'logs',
-    [string]$InputFile = 'source.mp3',
-    [string]$OutputCsv = 'rms.csv',
-    [string]$DeleteFile = 'RMS.csv', # analysed rms levels result that show the sections to be deleted
-    [string]$OutputFile = 'RMS.csv', # final output
+    [string]$InputFile = '_source.mp3',
+    [string]$OutputCsv = '_rms.csv',
+    [string]$DeleteFile = '_RMS.csv', # analysed rms levels result that show the sections to be deleted
+    [string]$OutputFile = '_RMS.csv', # final output
     [string]$OutputLog = 'logs'
 
 )

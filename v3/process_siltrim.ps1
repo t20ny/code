@@ -15,14 +15,14 @@ How: aselect will select audio sections we want to keep. Aim to keep speech.
 
 param (
     [string]$inputPath = "F:\av\audio\done",
-    [string]$InputFile = "source.mp3",
+    [string]$InputFile = "_source.mp3",
     [string]$dd = 'F:\av\audio\downloads',
     [string]$logPath = 'F:\av\audio\done\logs',
-    [string]$RmsFile = 'RMS.csv', # analysed rms levels result that show the sections to be deleted
-    [string]$SilenceFile = 'sil.csv',
+    [string]$RmsFile = '_RMS.csv', # analysed rms levels result that show the sections to be deleted
+    [string]$SilenceFile = '_sil.csv',
     [string]$OutputPath = 'F:\av\audio\done',
-    [string]$OutputFile = 'new.mp3',
-    [string]$DeleteFile = 'sil.csv', # analysed silence result that show the sections to be deleted
+    [string]$OutputFile = '_new.mp3',
+    [string]$DeleteFile = '_sil.csv', # analysed silence result that show the sections to be deleted
     $debug = 0
 )
 write-host $PSCommandPath -BackgroundColor cyan
@@ -281,8 +281,8 @@ function interpolate {
         }
     }
     # step 7
-    # end 3 seconds of the file are marked as delete section
-    $endDelete = 3
+    # end 20 seconds of the file are marked as delete section
+    $endDelete = 20
     $endSectionLength = [Math]::Min($endDelete, $data.Count)
     for ($index = $data.Count - $endSectionLength; $index -lt $data.Count; $index++) {
         $data[$index].delete = 1
@@ -564,22 +564,59 @@ function setFilter { # version 1.1
     return "aselect='not($deleteExpression)'"
 }
 
-function New-AudioFilter {
+function aFilter1 {
     param(
         [Parameter(Mandatory = $true)]
         [string]$BaseFilter
     )
-
+# -af asetrate=44100*0.9,aresample=44100,atempo=1/0.9 output.mp3
     $audioFilter = @(
         $BaseFilter,
-        'equalizer=f=900:width_type=h:width=200:g=-6',
-        'equalizer=f=1500:width_type=h:width=1000:g=-9',
-        'equalizer=f=6000:width_type=h:width=8000:g=-18',
-        'equalizer=f=15000:width_type=h:width=10000:g=-27'
+        'equalizer=f=450:width_type=h:width=200:g=0',
+        'equalizer=f=650:width_type=h:width=200:g=1',
+        'equalizer=f=850:width_type=h:width=200:g=0',
+        'equalizer=f=1050:width_type=h:width=200:g=-3',
+        'equalizer=f=1350:width_type=h:width=400:g=-9',
+        'equalizer=f=1750:width_type=h:width=500:g=-15',
+        'equalizer=f=6000:width_type=h:width=8000:g=-21',
+        'equalizer=f=15000:width_type=h:width=10000:g=-27',
+        "speechnorm=e=6.25:r=0.00001:l=1"
     ) -join ','
 
+    # https://superuser.com/questions/323119/how-can-i-normalize-audio-using-ffmpeg
     return $audioFilter
 }
+
+
+
+
+function aFilter2 {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$BaseFilter
+    )
+# -af "rubberband=pitch=0.8" output.mp3
+# https://ffmpegbyexample.com/examples/749f6u35/timestretch_audio_and_video_using_rubberband_filter/
+# https://salivity.github.io/ffmpeg/article/how-to-use-f-fmpeg-rubberband-for-audio-pitch-shifting
+# $audioFilter= "rubberband=pitch=0.7937" # down 4 semitones
+#  "rubberband=tempo=0.8:pitch=0.7937",
+# 0.89090 down 2 semitones
+# $audioFilter= "rubberband=pitch=0.94387" # down 1 semitone
+# rubberband=tempo=0.5:pitch=0.5    #: tempo=0.5 slow down the audio to half speed and pitch=0.5 lower the pitch by one octave.
+    $audioFilter = @(
+        $BaseFilter,
+        "rubberband=tempo=0.8:pitch=0.94387",
+        'equalizer=f=1050:width_type=h:width=200:g=-3',
+        'equalizer=f=1350:width_type=h:width=400:g=-9',
+        'equalizer=f=1750:width_type=h:width=500:g=-15',
+        'equalizer=f=6000:width_type=h:width=8000:g=-21',
+        'equalizer=f=15000:width_type=h:width=10000:g=-27',
+        "speechnorm=e=6.25:r=0.00001:l=1"
+    ) -join ','
+    return $audioFilter
+}
+
+
 
 function trimBlocks {
     param($FILTER)
@@ -601,7 +638,7 @@ function trimBlocks {
     Write-Host "in  mp3 =  $inFile"
     Write-Host "out mp3 =  $outputPath"
 
-    $audioFilter = New-AudioFilter -BaseFilter $FILTER
+    $audioFilter = aFilter2 -BaseFilter $FILTER
     Write-DebugLog "f1" $audioFilter
 
     $args = @(
@@ -671,7 +708,7 @@ function Invoke-SilTrimWorkflow {                           # MAIN WORKER
     try {
         $data = Get-SilenceFile -FilePath $silenceCsvPath
         $newData = interpolate $data
-        $exportPath = Join-Path $logPath 'silnew_.csv'
+        $exportPath = Join-Path $logPath '_silnew.csv'
         $newData | Export-Csv -Path $exportPath -NoTypeInformation
 
         $filter = setFilter $newData
