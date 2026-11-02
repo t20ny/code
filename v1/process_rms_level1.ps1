@@ -6,14 +6,14 @@ param(
     [string]$inputDir = 'F:\av\audio\downloads',
     [string]$OutputDir = 'F:\av\audio\done',
     [string]$logPath = 'logs',    
-    [string]$InputFile = 'THE609.mp3',
-    [string]$OutputCsv = 'rms.csv'
+    [string]$InputFile = '_source.mp3',
+    [string]$OutputCsv = '_rms.csv'
 )
 $debug=1
 [int]$attemps=1
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-$logName="test.log"
+$logName="_RMS_level1.log"
 
 $speechLvl=-60   # if rms level below Lvl then this window is speech   v1=-60
 $windowSize=200  # Theil–Sen regression window 38 frames per second so v1=200 about 5 seconds
@@ -33,12 +33,10 @@ function getRMS {
     write-host "fName   =  $fName"
     # write-host "get RMS $logName"
    
-    # 1 second points
-    #$filter = "astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level"
-
-    # 2 second points
-   #$filter = "astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level"
-    $FILTER= "astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level:file=$logName" #  verbose file output
+    # 1 second data points
+    $filter = "astats=metadata=1:reset=1,"
+    #  verbose file output
+    $FILTER+= "ametadata=print:key=lavfi.astats.Overall.RMS_level:file=$logName" 
 
     $args4 = @(
         '-hide_banner',
@@ -53,7 +51,7 @@ function getRMS {
     try {
         # & ffmpeg @args4                        ## echos result on Terminal.
         # & ffmpeg @args4  | Out-Null              ## out-null  
-        & ffmpeg @args4  2> "RMSerrors.log"         ## log error supresses Terminal   
+        & ffmpeg @args4  2> "_RMSerrors.log"         ## log error supresses Terminal   
     }
     finally {
         $ErrorActionPreference = $prevErrorPreference
