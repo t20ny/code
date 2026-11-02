@@ -1,4 +1,4 @@
-<# process RMS                                                          v2.1.4
+<# process RMS                                                          v2.1.5
 -------------------------------------------------------------------------------------
     get RMS data points, analyse, mark delete sections                 
 #>
@@ -33,8 +33,10 @@ function getRMS {
         [string]$fName,
         [string]$logName
     )
-    write-host "fName   =  $fName"
-    write-host "logName =  $logName"
+    IF ($DEBUG){
+        write-host "fName   =  $fName"
+        write-host "logName =  $logName"
+    }
    # https://ffmpeg.org/ffmpeg-filters.html#Filtergraph-syntax-1
    # https://ffmpeg-cookbook.com/en/articles/astats/
    # metadata=1   astats attaches its statistics to every audio frame
@@ -197,16 +199,13 @@ function analyzeRMS {
                 }
             } |
             Sort-Object -Property minute
-        )
-        if ($debug -eq 0){ # show histogram rows where $commercialFrames gt 0
-
-        # show result histogram     
-        $minuteHistogram |
-            Where-Object { $_.commercial -gt 10 } |
-            Format-Table -Property minute, frames, commercial, percent, histogram -AutoSize |
-            Out-Host 
+        )  
+        IF ($DEBUG){        # show result histogram     
+            $minuteHistogram |
+                Where-Object { $_.commercial -gt 10 } |
+                Format-Table -Property minute, frames, commercial, percent, histogram -AutoSize |
+                Out-Host 
         }
-
         $totalFrames = ($minuteHistogram | Measure-Object -Property frames -Sum).Sum
         $totalCommercial = ($minuteHistogram | Measure-Object -Property commercial -Sum).Sum
         $overallPercent = if ($totalFrames -gt 0) {
@@ -229,9 +228,11 @@ function analyzeRMS {
             $doAgain = 1
         }
 
-        Write-Host ('Summary= {0} analyzed minutes, {1} commercial, {2} speech.' -f $minuteHistogram.Count, $commercialMinutes, $speechMinutes)
+        IF ($DEBUG){
         Write-Host ('Overall commercial score= {0}% ({1}/{2} frames).' -f $overallPercent, $totalCommercial, $totalFrames)
         Write-Host "Conclusion= $conclusion"
+        }
+        Write-Host ('Summary= {0} analyzed minutes, {1} commercial, {2} speech. At speech level {3}db' -f $minuteHistogram.Count, $commercialMinutes, $speechMinutes,$speechLvl)
         $doAgain
     }
     $Script:attemps=$doAgain

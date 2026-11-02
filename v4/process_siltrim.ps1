@@ -29,6 +29,7 @@ write-host $PSCommandPath -BackgroundColor cyan
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $debug = 0
+$script:tt=0
 
 function Write-DebugLog {
     param($fun, $val)
@@ -592,6 +593,7 @@ function setFilter { # version 1.1
                 rmsPercent   = $rmsPercent
                 rmsHistogram = '#' * [Math]::Round($rmsPercent / 10)
             })
+            $script:tt+=$trimSeconds
         }
 
         $resultHistory |
@@ -768,7 +770,7 @@ function Invoke-SilTrimWorkflow {                           # MAIN WORKER
 
         $filter = setFilter $newData
         trimBlocks -FILTER $filter
-        Write-Host "Trim  and  $script:logName"
+        Write-Host "Trim  and  $script:logName TOTAL $script:tt"
     }
     catch {
         throw "Sil trim workflow failed: $($_.Exception.Message)"
