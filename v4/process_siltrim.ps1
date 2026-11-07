@@ -498,7 +498,7 @@ function setFilter { # version 1.1
     }
 
     # Compare trim seconds with the RMS commercial score for each minute.
-    Write-Host "Silence trim and rms level histograms by minute:"
+    Write-Host "Sil(not) trim and rms level histograms by minute:"
     $trimSecondsByMinute = @{}
     $sectionCountByMinute = @{}
     foreach ($section in $trimSections) {
@@ -770,7 +770,7 @@ function Invoke-SilTrimWorkflow {                           # MAIN WORKER
 
         $filter = setFilter $newData
         trimBlocks -FILTER $filter
-        Write-Host "Trim  and  $script:logName TOTAL $script:tt"
+        Write-Host "Trim  and  $script:logName TOTAL $([int]$script:tt) seconds"
     }
     catch {
         throw "Sil trim workflow failed: $($_.Exception.Message)"

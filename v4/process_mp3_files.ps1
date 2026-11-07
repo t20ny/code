@@ -10,7 +10,8 @@ param(
     [string]$OutputDir = 'F:\av\audio\done',
     [string[]]$fileArray = @(),
     $debug=0,
-    [switch]$Latest 
+    [switch]$Latest ,
+    [int]$mode
 )
 write-host $PSCommandPath -BackgroundColor cyan
 $scriptRoot = $PSScriptRoot
@@ -128,7 +129,7 @@ foreach ($file in $mp3Files) {
         continue
     }
 
-    write-host "$probeResult seconds  $($probeResult/60) minutes" 
+    write-host "$probeResult seconds  $($probeResult/60) minutes - Mode $mode" 
 
     # rms step will create rms.csv file of data to pass to the trim step
     $outLogDir = Join-Path $OutputDir 'logs'
