@@ -23,6 +23,7 @@ param (
     [string]$OutputPath = 'F:\av\audio\done',
     [string]$OutputFile = '_new.mp3',
     [string]$DeleteFile = '_sil.csv', # analysed silence result that show the sections to be deleted
+    $mode=1,
     $debug = 0
 )
 write-host $PSCommandPath -BackgroundColor cyan
@@ -47,32 +48,29 @@ function Write-DebugLog {
     }
 }
 
+
 function Resolve-RelativePath {
     param(
         [string]$PathValue,
         [string]$BasePath,
         [string]$DefaultName = $null
     )
-
     if ([string]::IsNullOrWhiteSpace($PathValue)) {
         if (-not [string]::IsNullOrWhiteSpace($DefaultName)) {
             return (Join-Path $BasePath $DefaultName)
         }
         return $null
     }
-
     if ([System.IO.Path]::IsPathRooted($PathValue)) {
         return $PathValue
     }
-
     return (Join-Path $BasePath $PathValue)
 }
 
+
 function Get-SilenceFile {
     param([string]$FilePath)
-
-    Write-Host "reading =  $FilePath"
-
+    if ($debug){ Write-Host "reading =  $FilePath"}
     try {
         return @(Import-Csv -LiteralPath $FilePath -Delimiter ",")
     }
@@ -80,6 +78,7 @@ function Get-SilenceFile {
         throw "Failed to read CSV '$FilePath': $($_.Exception.Message)"
     }
 }
+
 
 function Ensure-RowProperty {
     param(
@@ -89,20 +88,17 @@ function Ensure-RowProperty {
         [string]$PropertyName,
         [object]$Value
     )
-
     if ($null -eq $Row) { return $null }
-
     $propertyNames = @($Row.PSObject.Properties.Name)
     $existingProperty = $propertyNames | Where-Object { $_ -ieq $PropertyName } | Select-Object -First 1
-
     if ($existingProperty) {
         $Row.$existingProperty = $Value
         return $Row
     }
-
     $null = $Row | Add-Member -NotePropertyName $PropertyName -NotePropertyValue $Value -Force
     return $Row
 }
+
 
 function Get-RowPropertyValue {
     param(
@@ -110,42 +106,35 @@ function Get-RowPropertyValue {
         [string]$PropertyName,
         [object]$Default = $null
     )
-
     if ($null -eq $Row) { return $Default }
-
     $propertyNames = @($Row.PSObject.Properties.Name)
     $existingProperty = $propertyNames | Where-Object { $_ -ieq $PropertyName } | Select-Object -First 1
-
     if (-not $existingProperty) { return $Default }
-
     $value = $Row.$existingProperty
     if ($null -eq $value) { return $Default }
     return $value
 }
 
+
+
 function Set-DeleteState {
     param($data)
-
     foreach ($row in @($data)) {
         if ($null -eq $row) { continue }
-
         $deleteValue = [int](Get-RowPropertyValue -Row $row -PropertyName 'delete' -Default 0)
         $row = Ensure-RowProperty -Row $row -PropertyName 'delete' -Value $deleteValue
         $row.delete = $deleteValue
-
         if ($deleteValue -eq 1) {
             Write-DebugLog "delt" $row
         }
     }
-
     return @($data)
 }
 
+
 function interpolate {
     param($data)
-
     $data = Set-DeleteState $data
-
     foreach ($row in $data) {
         # step 1        
         # read the delete column values 
@@ -158,25 +147,21 @@ function interpolate {
         else {
             0
         }
-
         if ($row.PSObject.Properties.Name -contains 'delet2') {
             $row.delet2 = $deleteValue
         }
         else {
             $row | Add-Member -NotePropertyName delet2 -NotePropertyValue $deleteValue
         }
-
         if ($row.PSObject.Properties.Name -contains 'delete') {
             $row.delete = $deleteValue
         }
         else {
             $row | Add-Member -NotePropertyName delete -NotePropertyValue $deleteValue
         }
-
         [int]$minute = $row.pts_time / 60
         Write-DebugLog "ipol  $minute" $row
     }
-
 
 
     # step 2

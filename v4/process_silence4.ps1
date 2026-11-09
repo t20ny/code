@@ -8,6 +8,7 @@ param(
     [string]$OutputDir = 'F:\av\audio\done',
     [string]$OutputLog="_silence.log",
     [string]$OutputCsv = "_sil.csv",
+    $mode=1,
     $debug=1
 )
 write-host $PSCommandPath -BackgroundColor cyan
@@ -21,8 +22,91 @@ $OutputCsv="$OutputDir\logs\_sil.Csv"
 
 # analyze the MP3 audio file
 $ErrorActionPreference = 'Continue'
-[double]$MinSilenceSeconds = 0.35
-[string]$Threshold = '-35dB'
+$modeText = [string]$mode
+$modeKey = $modeText.Trim().ToLowerInvariant()
+$resolvedMode = 1
+switch ($modeKey) {
+    '1' { $resolvedMode = 1 }
+    'podcast' { $resolvedMode = 1 }
+    'balanced' { $resolvedMode = 1 }
+    '2' { $resolvedMode = 2 }
+    'speech' { $resolvedMode = 2 }
+    '3' { $resolvedMode = 3 }
+    'quiet' { $resolvedMode = 3 }
+    'quiet-room' { $resolvedMode = 3 }
+    'traffic' { $resolvedMode = 3 }
+    '4' { $resolvedMode = 4 }
+    'sleep' { $resolvedMode = 4 }
+    '5' { $resolvedMode = 5 }
+    'crowd' { $resolvedMode = 5 }
+    'noisy' { $resolvedMode = 5 }
+    '6' { $resolvedMode = 6 }
+    'speed' { $resolvedMode = 6 }
+    'aggressive' { $resolvedMode = 6 }
+    default {
+        if ($modeText -match '^[0-9]+$') {
+            $resolvedMode = [int]$modeText
+        }
+        else {
+            $resolvedMode = 1
+        }
+    }
+}
+
+
+# adjust mode setting so final Trim  TOTAL 75 to 150 seconds
+[string]$ModeName = 'podcast'
+switch ($resolvedMode) {
+    1 {
+        # Standard podcast cleanup: trims dead air without chopping normal speech pauses.
+        [double]$MinSilenceSeconds = 0.35
+        [string]$Threshold = '-35dB'
+        $ModeName = 'podcast'
+    }
+    2 {
+        # Slightly more sensitive to short speech gaps and quiet breaths.
+        [double]$MinSilenceSeconds = 0.25
+        [string]$Threshold = '-30dB'
+        $ModeName = 'speech'
+    }
+    3 {
+        # Low-noise / quiet-room setting: preserves only real silence, avoids cleaning too much.
+        [double]$MinSilenceSeconds = 0.50
+        [string]$Threshold = '-40dB'
+        $ModeName = 'quiet-room'
+    }
+    4 {
+        # More aggressive dead-air removal for sleeping or low-content segments.
+        [double]$MinSilenceSeconds = 1.00
+        [string]$Threshold = '-45dB'
+        $ModeName = 'sleep'
+    }
+    5 {
+        # Noisy environment setting: removes longer loud sections but keeps speech audible.
+        [double]$MinSilenceSeconds = 0.75
+        [string]$Threshold = '-25dB'
+        $ModeName = 'noisy'
+    }
+    6 {
+        # Very aggressive cleanup for stripping filler and long gaps.
+        [double]$MinSilenceSeconds = 0.12
+        [string]$Threshold = '-20dB'
+        $ModeName = 'aggressive'
+    }
+    7 {
+        # Very aggressive 
+        [double]$MinSilenceSeconds = 0.20
+        [string]$Threshold = '-30dB'
+        $ModeName = 'aggressive'
+    }
+    default {
+        [double]$MinSilenceSeconds = 0.35
+        [string]$Threshold = '-35dB'
+        $ModeName = 'podcast'
+    }
+}
+Write-Host "Silence mode $resolvedMode [$ModeName] (input:$modeText): threshold $Threshold, minimum silence $MinSilenceSeconds seconds" -ForegroundColor Cyan
+
 $ymd = (Get-Date).ToString('yyyyMMdd')
 $script:LogDirectory = Join-Path $InputDir 'logs'
 $script:DailyLogFile = Join-Path $script:LogDirectory "$ymd.txt"

@@ -11,7 +11,9 @@ param(
     [string[]]$fileArray = @(),
     $debug=0,
     [switch]$Latest ,
-    [int]$mode
+    [Alias('M')]
+    $mode = 1,
+    [string]$ModeName = 'Podcast'
 )
 write-host $PSCommandPath -BackgroundColor cyan
 $scriptRoot = $PSScriptRoot
@@ -54,6 +56,33 @@ function Get-Mp3Files {
     return @($files)
 }
 
+
+$modeKey = [string]$mode
+if ($modeKey -and $modeKey -notmatch '^[0-9]+$') {
+    $normalizedMode = $modeKey.Trim().ToLowerInvariant()
+    $names = @{
+        'podcast' = 1
+        'balanced' = 1
+        'speech' = 2
+        'quiet' = 3
+        'quiet-room' = 3
+        'traffic' = 3
+        'sleep' = 4
+        'crowd' = 5
+        'noisy' = 5
+        'speed' = 6
+        'aggressive' = 6
+    }
+    if ($names.ContainsKey($normalizedMode)) {
+        $mode = [int]$names[$normalizedMode]
+    }
+    else {
+        $mode = 1
+    }
+}
+elseif (-not $mode) {
+    $mode = 1
+}
 
 # MAIN ##################################
 if (-not (Test-Path -LiteralPath $InputDir -PathType Container)) {
@@ -155,6 +184,7 @@ foreach ($file in $mp3Files) {
         OutputFile = "$baseName.mp3"
         SilenceFile = '_sil.csv'
         RmsFile = '_RMS.csv'
+        mode=$mode
         debug=$debug
     }
     
