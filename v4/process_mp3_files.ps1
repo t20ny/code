@@ -215,8 +215,8 @@ foreach ($file in $mp3Files) {
         & $silenceScript @allParams
         
         # 5 trim and delete AND re-EXPORT result.
-        & $silencetrim @allParams
-
+        $trimmed=(& $silencetrim @allParams)
+        write-host $trimmed
         # & $spectrum01 @allParams
     }
 }

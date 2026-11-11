@@ -34,7 +34,6 @@ $script:tt=0
 
 function Write-DebugLog {
     param($fun, $val)
-
     if ($debug) {
         if ($fun -match "ipol") {
             Write-Host "Debug $fun $val" -ForegroundColor DarkCyan
@@ -597,6 +596,7 @@ function setFilter { # version 1.1
     return "aselect='not($deleteExpression)'"
 }
 
+
 function aFilter1 {
     param(
         [Parameter(Mandatory = $true)]
@@ -624,8 +624,6 @@ function aFilter1 {
     #  Male voices average 85-180 Hz; female voices 165-255 Hz
     return $audioFilter
 }
-
-
 
 
 function aFilter2 {
@@ -660,14 +658,53 @@ function aFilter2 {
 
 
 
+function aFilter {
+    param(
+        $mode=1,
+        [Parameter(Mandatory = $true)]
+        [string]$BaseFilter
+    )
+    if ($mode -eq 2){                   # MODE 2
+        $audioFilter = @(
+            $BaseFilter,
+            "rubberband=tempo=0.75:pitch=0.995",
+            'equalizer=f=130:width_type=h:width=100:g=1',
+            'equalizer=f=230:width_type=h:width=100:g=-2',
+            'equalizer=f=480:width_type=h:width=400:g=-3',
+            'equalizer=f=980:width_type=h:width=600:g=-6',
+            'equalizer=f=1780:width_type=h:width=1000:g=-12',
+            'equalizer=f=2780:width_type=h:width=1000:g=-15',
+            'equalizer=f=6400:width_type=h:width=6400:g=-21',
+            'equalizer=f=15000:width_type=h:width=10800:g=-27',
+            "speechnorm=e=6.25:r=0.00001:l=1"
+        ) -join ','
+    }
+    else {                              # MODE 1
+         $audioFilter = @(
+            $BaseFilter,
+            'equalizer=f=130:width_type=h:width=100:g=1',
+            'equalizer=f=230:width_type=h:width=100:g=-2',
+            'equalizer=f=480:width_type=h:width=400:g=-3',
+            'equalizer=f=980:width_type=h:width=600:g=-6',
+            'equalizer=f=1780:width_type=h:width=1000:g=-12',
+            'equalizer=f=2780:width_type=h:width=1000:g=-15',
+            'equalizer=f=6400:width_type=h:width=6400:g=-21',
+            'equalizer=f=15000:width_type=h:width=10800:g=-27',
+            "atempo=0.8",
+            "speechnorm=e=12.5:r=0.0001:l=1"
+        ) -join ','
+    }
+    return $audioFilter
+}
+
+
+
 function trimBlocks {
     param($FILTER)
-
     $ffmpegPath = (Get-Command ffmpeg -ErrorAction SilentlyContinue)?.Source
     if (-not $ffmpegPath) {
         throw "ffmpeg was not found on PATH. Install ffmpeg and retry."
     }
-
     $inputExists = Test-Path -LiteralPath $inFile -PathType Leaf
     $outputDirectory = Split-Path -Parent $outputPath
     if (-not $inputExists) {
@@ -676,11 +713,11 @@ function trimBlocks {
     if ($outputDirectory -and -not (Test-Path -LiteralPath $outputDirectory)) {
         $null = New-Item -ItemType Directory -Path $outputDirectory -Force
     }
-
     Write-Host "in  mp3 =  $inFile"
     Write-Host "out mp3 =  $outputPath"
 
-    $audioFilter = aFilter1 -BaseFilter $FILTER
+    # $audioFilter = aFilter1 -BaseFilter $FILTER
+    $audioFilter = aFilter -mode $mode -BaseFilter $FILTER
     Write-DebugLog "f1" $audioFilter
 
     $args = @(
@@ -693,7 +730,6 @@ function trimBlocks {
         '-q:a', '4',
         $outputPath
     )
-
     $previousErrorPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
@@ -702,7 +738,6 @@ function trimBlocks {
     finally {
         $ErrorActionPreference = $previousErrorPreference
     }
-
     if ($LASTEXITCODE -ne 0) {
         if ($LASTEXITCODE -eq -22) {
             throw "ffmpeg exited with code $LASTEXITCODE. This may be due to an unsupported file format or codec."
@@ -711,10 +746,11 @@ function trimBlocks {
     }
 }
 
+
 function Invoke-SilTrimWorkflow {                           # MAIN WORKER
     Set-Location -LiteralPath $OutputPath
 
-    $script:logName = Join-Path $logPath 'delete.log'
+    $script:logName = Join-Path $logPath '_delete.log'
     $script:inFile = Resolve-RelativePath -PathValue $InputFile -BasePath $dd
     $script:outputPath = Resolve-RelativePath -PathValue $OutputFile -BasePath $OutputPath
     $deleteCsvPath = Resolve-RelativePath -PathValue $DeleteFile -BasePath $logPath
@@ -755,7 +791,9 @@ function Invoke-SilTrimWorkflow {                           # MAIN WORKER
 
         $filter = setFilter $newData
         trimBlocks -FILTER $filter
-        Write-Host "Trim  and  $script:logName TOTAL $([int]$script:tt) seconds"
+        $TOTAL =[int]$script:tt
+        if ($debug){Write-Host "Trim  and  $script:logName $TOTAL seconds"}
+        return $TOTAL
     }
     catch {
         throw "Sil trim workflow failed: $($_.Exception.Message)"
