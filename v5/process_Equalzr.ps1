@@ -1,4 +1,4 @@
-<# equalize only                              v1.0.0
+<# equalize only                              v1.0.1
 -------------------------------------------------------------------------------------
 pre: mp3 input file 
 Post: output mp3 file equalized with high pitch voices suppressed
@@ -6,14 +6,14 @@ Post: output mp3 file equalized with high pitch voices suppressed
 
 param (
     [string]$inputPath = "F:\av\audio\done",
-    [string]$InputFile = "source.mp3",
+    [string]$InputFile = "_source.mp3",
     [string]$dd = 'F:\av\audio\downloads',
     [string]$logPath = 'F:\av\audio\done\logs',
-    [string]$RmsFile = 'RMS.csv', # analysed rms levels result that show the sections to be deleted
-    [string]$EqualzenceFile = 'Equalz.csv',
+    [string]$RmsFile = '_RMS.csv', # analysed rms levels result that show the sections to be deleted
+    [string]$EqualzenceFile = '_Equalz.csv',
     [string]$OutputPath = 'F:\av\audio\done',
-    [string]$OutputFile = 'new.mp3',
-    [string]$DeleteFile = 'Equalz.csv', # analysed Equalzence result that show the sections to be deleted
+    [string]$OutputFile = '_new.mp3',
+    [string]$DeleteFile = '_Equalz.csv', # analysed Equalzence result that show the sections to be deleted
     $debug = 0
 )
 write-host $PSCommandPath -BackgroundColor cyan
@@ -69,12 +69,15 @@ function New-AudioFilter {
 
     $audioFilter = @(
       #  $BaseFilter,
-        'equalizer=f=2000:width_type=h:width=2000:g=-16',
-        'equalizer=f=4000:width_type=h:width=2000:g=-26',
-        'equalizer=f=6000:width_type=h:width=2000:g=-26',
-        'equalizer=f=8000:width_type=h:width=2000:g=-26',
-        'equalizer=f=10000:width_type=h:width=2000:g=-25',
-        'equalizer=f=15000:width_type=h:width=3000:g=-25'
+         'equalizer=f=130:width_type=h:width=100:g=1',
+        'equalizer=f=230:width_type=h:width=100:g=-2',
+        'equalizer=f=480:width_type=h:width=400:g=-3',
+        'equalizer=f=980:width_type=h:width=600:g=-6',
+        'equalizer=f=1780:width_type=h:width=1000:g=-12',
+        'equalizer=f=2780:width_type=h:width=1000:g=-15',
+        'equalizer=f=6400:width_type=h:width=6400:g=-21',
+        'equalizer=f=15000:width_type=h:width=10800:g=-27',
+        "speechnorm=e=12.5:r=0.0001:l=1"
     ) -join ','
 
     return $audioFilter
@@ -83,7 +86,8 @@ function New-AudioFilter {
 function trimBlocks {
     param($FILTER)
 
-    $ffmpegPath = (Get-Command ffmpeg -ErrorAction silentlyContinue)?.Source
+    $ffmpegCmd = Get-Command ffmpeg -ErrorAction SilentlyContinue
+    $ffmpegPath = if ($ffmpegCmd) { $ffmpegCmd.Source } else { $null }
     if (-not $ffmpegPath) {
         throw "ffmpeg was not found on PATH. Install ffmpeg and retry."
     }
@@ -134,7 +138,7 @@ function trimBlocks {
 function Invoke-EqualzWorkflow {                           # MAIN WORKER
     Set-Location -LiteralPath $OutputPath
 
-    $script:logName = Join-Path $logPath 'delete.log'
+    $script:logName = Join-Path $logPath '_delete.log'
     $script:inFile = Resolve-RelativePath -PathValue $InputFile -BasePath $dd
     $script:outputPath = Resolve-RelativePath -PathValue $OutputFile -BasePath $OutputPath
  

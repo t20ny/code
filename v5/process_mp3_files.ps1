@@ -22,8 +22,9 @@ Set-Location -LiteralPath $scriptRoot
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-$dbug="InputDir {0,-68}" -f  $InputDir 
-write-host $dbug  -ForegroundColor Yellow
+if ($debug){$dbug="InputDir {0,-68}" -f  $InputDir 
+    write-host $dbug  -ForegroundColor Yellow
+}
 $InputPath = $InputDir
 
 $dts = (Get-Date).ToString('yyyyMMdd.HHmmss')
@@ -42,6 +43,30 @@ function Write-Log {
 }
 Write-Log "START ##-by-->  $scriptCaller" 
 
+$script:ResultRecords = @()
+
+function Save-Mp3Results {
+    param(
+        [string]$Path,
+        [System.Collections.IEnumerable]$Records
+    )
+
+    $payload = @()
+    foreach ($record in @($Records)) {
+        if ($null -eq $record) { continue }
+
+        $payload += [pscustomobject]@{
+            basename = [string]($record.basename)
+            date = $record.date
+            mode = $record.mode
+            trimmed = [int]$record.trimmed
+            outputFile = $record.outputFile
+            status = $record.status
+        }
+    }
+
+    $payload | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $Path -Encoding UTF8
+}
 
 function Get-Mp3Files {
     param(
@@ -124,6 +149,8 @@ if ($mp3Files.Count -eq 0) {
 
 foreach ($file in $mp3Files) {
     $baseName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
+    $trimmedSeconds = 0
+    $outputFilePath = Join-Path $OutputDir "$baseName.mp3"
 
     Write-Log "Inspecting: $($file.FullName)"
     if ($file.Name -notmatch "_source.mp3"){ 
@@ -173,9 +200,10 @@ foreach ($file in $mp3Files) {
     
 
     $allParams = @{
-        inputDir  = $InputDir
+        InputDir  = $InputDir
         inputPath  = $InputPath
         logPath   = $outLogDir
+        OutputDir = $OutputDir
         InputFile = $file.Name
         OutputCsv = "$baseName.csv"
         OutputLog = "$baseName.log"
@@ -204,6 +232,7 @@ foreach ($file in $mp3Files) {
         # 5 trim and delete AND re-EXPORT result.
         $trimOutput = Join-Path $OutputDir "$baseName.mp3"
         & $trimScript -dd $InputDir -logPath $outLogDir -InputFile $file.FullName -DeleteFile $deleteFile -OutputFile $trimOutput
+        $trimmedSeconds = 0
 
     }
     else { # SILENCE PROCESSING ONLY #
@@ -215,11 +244,24 @@ foreach ($file in $mp3Files) {
         & $silenceScript @allParams
         
         # 5 trim and delete AND re-EXPORT result.
-        $trimmed=(& $silencetrim @allParams)
-        write-host $trimmed
+        $trimmed = (& $silencetrim @allParams)
+        $trimmedSeconds = if ($null -ne $trimmed) { [int]$trimmed } else { 0 }
+        write-host " trimmed $trimmedSeconds seconds."
         # & $spectrum01 @allParams
+    }
+
+    $script:ResultRecords += [pscustomobject]@{
+        basename = $baseName
+        date = (Get-Date).ToString('yyyy-MM-dd')
+        mode = [int]$mode
+        trimmed = [int]$trimmedSeconds
+        outputFile = $outputFilePath
+        status = 'processed'
     }
 }
 
+$resultLogPath = Join-Path $OutputDir '_mp3Log.json'
+Save-Mp3Results -Path $resultLogPath -Records $script:ResultRecords
 Write-Log "Finished processing $($mp3Files.Count) MP3 file(s)."
 Write-Log "Cleaned output directory: $OutputDir"
+Write-Log "Results saved to: $resultLogPath"

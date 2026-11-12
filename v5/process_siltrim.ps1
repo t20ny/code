@@ -78,6 +78,45 @@ function Get-SilenceFile {
     }
 }
 
+function Resolve-ExistingFilePath {
+    param(
+        [string]$PathValue,
+        [string]$BasePath = $null
+    )
+
+    if ([string]::IsNullOrWhiteSpace($PathValue)) {
+        return $null
+    }
+
+    $candidate = if ([System.IO.Path]::IsPathRooted($PathValue)) {
+        $PathValue
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace($BasePath)) {
+        Join-Path $BasePath $PathValue
+    }
+    else {
+        $PathValue
+    }
+
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+        return $candidate
+    }
+
+    $fullCandidate = [System.IO.Path]::GetFullPath($candidate)
+    $directory = Split-Path -Parent $fullCandidate
+    if (-not $directory) {
+        return $null
+    }
+
+    $fileName = [System.IO.Path]::GetFileName($fullCandidate)
+    $matches = @(Get-ChildItem -LiteralPath $directory -File -ErrorAction SilentlyContinue | Where-Object { $_.Name -ieq $fileName })
+    if ($matches.Count -gt 0) {
+        return $matches[0].FullName
+    }
+
+    return $null
+}
+
 
 function Ensure-RowProperty {
     param(
@@ -455,12 +494,9 @@ function setFilter { # version 1.1
             }
             $trimSectionEnd = $thisTime
 
-            $deleteRanges.Add([string]::Format(
-                    [System.Globalization.CultureInfo]::InvariantCulture,
-                    'between(t,{0:R},{1:R})',
-                    $prevTime,
-                    $thisTime
-                ))
+            $startValue = ([double]$prevTime).ToString('G17', [System.Globalization.CultureInfo]::InvariantCulture)
+            $endValue = ([double]$thisTime).ToString('G17', [System.Globalization.CultureInfo]::InvariantCulture)
+            $deleteRanges.Add("between(t,$startValue,$endValue)")
         }
         elseif ($null -ne $trimSectionStart) {
             $trimSections.Add([pscustomobject]@{
@@ -679,6 +715,17 @@ function aFilter {
             "speechnorm=e=6.25:r=0.00001:l=1"
         ) -join ','
     }
+    elseif ($mode -eq 7){                   # MODE 7
+        $audioFilter = @(
+            $BaseFilter,
+            'equalizer=f=980:width_type=h:width=600:g=-6',
+            'equalizer=f=1780:width_type=h:width=1000:g=-12',
+            'equalizer=f=2780:width_type=h:width=1000:g=-15',
+            'equalizer=f=6400:width_type=h:width=6400:g=-21',
+            'equalizer=f=15000:width_type=h:width=10800:g=-27',
+            "speechnorm=e=6.25:r=0.00001:l=1"
+        ) -join ','
+    }
     else {                              # MODE 1
          $audioFilter = @(
             $BaseFilter,
@@ -701,7 +748,8 @@ function aFilter {
 
 function trimBlocks {
     param($FILTER)
-    $ffmpegPath = (Get-Command ffmpeg -ErrorAction SilentlyContinue)?.Source
+    $ffmpegCmd = Get-Command ffmpeg -ErrorAction SilentlyContinue
+    $ffmpegPath = if ($ffmpegCmd) { $ffmpegCmd.Source } else { $null }
     if (-not $ffmpegPath) {
         throw "ffmpeg was not found on PATH. Install ffmpeg and retry."
     }
@@ -754,7 +802,10 @@ function Invoke-SilTrimWorkflow {                           # MAIN WORKER
     $script:inFile = Resolve-RelativePath -PathValue $InputFile -BasePath $dd
     $script:outputPath = Resolve-RelativePath -PathValue $OutputFile -BasePath $OutputPath
     $deleteCsvPath = Resolve-RelativePath -PathValue $DeleteFile -BasePath $logPath
-    $silenceCsvPath = Resolve-RelativePath -PathValue $SilenceFile -BasePath $logPath
+    $silenceCsvPath = Resolve-ExistingFilePath -PathValue $SilenceFile -BasePath $logPath
+    if (-not $silenceCsvPath) {
+        $silenceCsvPath = Resolve-RelativePath -PathValue $SilenceFile -BasePath $logPath
+    }
 
     if (-not (Test-Path -LiteralPath $script:inFile -PathType Leaf)) {
         throw "Input file not found: $script:inFile"
