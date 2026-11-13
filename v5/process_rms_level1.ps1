@@ -298,7 +298,7 @@ try {
     Write-Host "[1]==== = Use the existing RMS log  $RMSlog " -foregroundcolor yellow
   }
   else {
-    Write-Host "[1]==== = get RMS  "
+    Write-Host "[1]==== = get RMS  "  -foregroundColor Blue
   # getRMS -fName $inputPath -logName $RMSlog
     getRMS -fName $resolvedInputFile -logName $RMSlog
   }

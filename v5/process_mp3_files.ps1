@@ -1,4 +1,4 @@
-<# process main                                                          v2.0.0
+<# process main                                                          v2.0.5
 -------------------------------------------------------------------------------------
     get RMS data points, analyse, mark delete sections,
     interpolate to ensure delete marks are continuous
@@ -173,7 +173,7 @@ foreach ($file in $mp3Files) {
     $prevErrorPreference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        write-host "#=#=#=#== probe ==#== $baseName ===== ===== =#=" -ForegroundColor blue
+        write-host "#=#=#=#== mp3 probe ==#==  ===== ===== =#=" -ForegroundColor blue
         [int]$probeResult = & ffprobe @probeArgs 2>$null
     }
     finally {

@@ -105,7 +105,7 @@ switch ($resolvedMode) {
         $ModeName = 'podcast'
     }
 }
-Write-Host "Silence mode $resolvedMode [$ModeName] (input:$modeText): threshold $Threshold, minimum silence $MinSilenceSeconds seconds" -ForegroundColor Cyan
+Write-Host "========= Silence mode $resolvedMode [$ModeName] threshold $Threshold, minimum silence $MinSilenceSeconds seconds" -ForegroundColor blue
 
 $ymd = (Get-Date).ToString('yyyyMMdd')
 $script:LogDirectory = Join-Path $InputDir 'logs'
@@ -246,9 +246,11 @@ function AnalyzeSilence {
     #$OutputCsv = $OutputCsv -replace '\.csv$', '.silence.csv'
     $result | Export-Csv -LiteralPath $OutputCsv -NoTypeInformation
     
-    Write-Host "=========  Silence output   $OutputCsv " 
+    if($debug){Write-Host "=========  Silence output   $OutputCsv " }
 }
             
-Write-Host "========= analyze silence         ===========================================" -foregroundColor Blue
-Write-Host "Input   =  $InputFile"
+if($debug){
+    Write-Host "========= analyze silence         ===========================================" -foregroundColor Blue
+    Write-Host "Input   =  $InputFile"
+}
 AnalyzeSilence -Fname $InputFile -LogName $OutputLog
