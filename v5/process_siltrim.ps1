@@ -518,7 +518,7 @@ function setFilter { # version 1.1
     }
 
     # Compare trim seconds with the RMS commercial score for each minute.
-    Write-Host "Sil(not) trim and rms level histograms by minute:"
+    Write-Host "Sil trim m$mode and rms level histograms by minute:"
     $trimSecondsByMinute = @{}
     $sectionCountByMinute = @{}
     foreach ($section in $trimSections) {

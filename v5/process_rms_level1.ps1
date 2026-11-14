@@ -1,4 +1,4 @@
-<# process RMS                                                          v2.1.5
+<# process RMS                                                          v2.1.6
 -------------------------------------------------------------------------------------
     get RMS data points, analyse, mark delete sections                 
 #>
@@ -19,15 +19,18 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $logName="_process_rms.log"
 
-
-$speechLvl=-60   # if rms level below Lvl then this window is speech   v1=-60
-$windowSize=200  # Theil–Sen regression window 38 frames per second so v1=200 about 5 seconds
-
-$speechLvl=-50   # if rms level below Lvl then this window is speech   v2=-50
-$windowSize=240  # Theil–Sen regression window 38 frames per second so v2=240 about 6 seconds
-
-$speechLvl=-60   # if rms level below Lvl then this window is speech   v3=-50
-$windowSize=160  # Theil–Sen regression window 38 frames per second so v3=120 about 3 seconds
+# default mode 1
+    $speechLvl=-60   # if rms level below Lvl then this window is speech   v3=-60 default mode 1.
+    $windowSize=160  # Theil–Sen regression window 38 frames per second so v3=120 about 3 seconds
+    
+if ($mode -gt 1){ 
+    $speechLvl=-50   # if rms level below Lvl then this window is speech   v2=-50
+    $windowSize=240  # Theil–Sen regression window 38 frames per second so v2=240 about 6 seconds
+}
+if ($mode -eq 7){    
+    $speechLvl=-60   # if rms level below Lvl then this window is speech   v1=-60
+    $windowSize=200  # Theil–Sen regression window 38 frames per second so v1=200 about 5 seconds
+}
 
 function getRMS {
     param(
@@ -216,6 +219,7 @@ function analyzeRMS {
         }
         $commercialMinutes = @($minuteHistogram | Where-Object { $_.percent -ge 50 }).Count
         $speechMinutes = @($minuteHistogram | Where-Object { $_.percent -lt 50 }).Count
+        Write-Host ('{3}db has  {0} minutes with {1} commercial, {2} speech.' -f $minuteHistogram.Count, $commercialMinutes, $speechMinutes,$speechLvl) -ForegroundColor Cyan
         if ($overallPercent -ge 70) {
             $conclusion = 'The recording is predominantly predicted commercial. Recommend +10db change on speech level threshold and retry'
             $script:speechLvl = $speechLvl + 10
@@ -233,9 +237,6 @@ function analyzeRMS {
         Write-Host ('Overall commercial score= {0}% ({1}/{2} frames).' -f $overallPercent, $totalCommercial, $totalFrames)
         Write-Host "Conclusion= $conclusion"
         }
-       #Write-Host ('Summary= {0} analyzed minutes, {1} commercial, {2} speech. At speech level {3}db' -f $minuteHistogram.Count, $commercialMinutes, $speechMinutes,$speechLvl)
-        Write-Host ('{3}db has  {0} minutes with {1} commercial, {2} speech.' -f $minuteHistogram.Count, $commercialMinutes, $speechMinutes,$speechLvl)
-       # $doAgain
     }
     $Script:attemps=$doAgain
 }

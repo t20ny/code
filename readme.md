@@ -34,3 +34,6 @@ Example:
 ```
 
 The log is kept for each run so the latest result summary remains available for review.
+
+## future
+- transcript: create text from the audio. First identify each person and convert their speech to sensible text. Then summarise and output as show notes.
