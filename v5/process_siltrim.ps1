@@ -2,7 +2,7 @@
 -------------------------------------------------------------------------------------
 pre: mp3 input file together with a csv of silence marks. The rows show the time of silence with start end length of the silence.
 Post: output mp3 file trimmed of the loud sections.
-How: aselect will select audio sections we want to keep. Aim to keep speech.
+How: aselect will select audio sections we want to keep. Goal is to keep the regular conversational speech.
     delete the long sections where there is NO silence marks (loud background sections in commercials are to be deleted)
     cat tags: show silence marks where the loud sections End.
     cat=quiet      keep quiet sections
@@ -518,7 +518,7 @@ function setFilter { # version 1.1
     }
 
     # Compare trim seconds with the RMS commercial score for each minute.
-    Write-Host "Sil trim m$mode and rms level histograms by minute:"
+    Write-Host "!Sil trim m$mode and rms level histograms by minute:"
     $trimSecondsByMinute = @{}
     $sectionCountByMinute = @{}
     foreach ($section in $trimSections) {
@@ -832,7 +832,7 @@ function Invoke-SilTrimWorkflow {                           # MAIN WORKER
         throw "Input and output paths must be different: $script:inFile"
     }
 
-    Write-Host "========= sil trim and delete   =============================================" -ForegroundColor Blue
+    if ($debug){Write-Host "========= sil trim and delete   =============================================" -ForegroundColor Blue}
 
     try {
         $data = Get-SilenceFile -FilePath $silenceCsvPath
