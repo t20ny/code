@@ -24,8 +24,9 @@ param (
     [string]$OutputFile = '_new.mp3',
     [string]$DeleteFile = '_sil.csv', # analysed silence result that show the sections to be deleted
     $mode=1,
-    $debug = 0
+    $debug = 1
 )
+ $debug = 1
 write-host $PSCommandPath -BackgroundColor cyan
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -518,7 +519,7 @@ function setFilter { # version 1.1
     }
 
     # Compare trim seconds with the RMS commercial score for each minute.
-    Write-Host "!Sil trim m$mode and rms level histograms by minute:"
+    Write-Host "!Sil trim m$mode and rms level histograms by minute:" -ForegroundColor blue
     $trimSecondsByMinute = @{}
     $sectionCountByMinute = @{}
     foreach ($section in $trimSections) {

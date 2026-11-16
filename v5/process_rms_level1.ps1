@@ -177,7 +177,8 @@ function analyzeRMS {
     # export to csv
     $result | Export-Csv -LiteralPath $ExportFile -NoTypeInformation
     Copy-Item $ExportFile "$LogDir\_rms.csv" # copy for spectrum.xlsx visualisations
-    Write-Host "Exported=  $ExportFile"
+   #Write-Host "Exported=  $ExportFile"
+    Write-Host "RMS csv =  $ExportFile" -ForegroundColor Blue
     if ($debug){Write-Host "copied-->  $LogDir\_rms.csv" -ForegroundColor cyan}
 
     # Show the sum of delet2 values for each minute 
@@ -299,7 +300,7 @@ try {
     Write-Host "[1]==== = Use the existing RMS log  $RMSlog " -foregroundcolor yellow
   }
   else {
-    Write-Host "[1]==== = get RMS  "  -foregroundColor Blue
+    if ($debug){Write-Host "[1]==== = get RMS  "  -foregroundColor Blue}
   # getRMS -fName $inputPath -logName $RMSlog
     getRMS -fName $resolvedInputFile -logName $RMSlog
   }
