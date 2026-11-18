@@ -8,7 +8,7 @@ param(
     [string]$OutputDir = 'F:\av\audio\done',
     [string]$OutputLog="_silence.log",
     [string]$OutputCsv = "_sil.csv",
-    $mode=1,
+    $mode=8,
     $debug=1
 )
 write-host $PSCommandPath -BackgroundColor cyan
@@ -99,6 +99,12 @@ switch ($resolvedMode) {
         [string]$Threshold = '-30dB'
         $ModeName = 'aggressive'
     }
+    8 {
+        # Very aggressive 2
+        [double]$MinSilenceSeconds = 0.05
+        [string]$Threshold = '-50dB'
+        $ModeName = 'aggressive'
+    }
     default {
         [double]$MinSilenceSeconds = 0.35
         [string]$Threshold = '-35dB'
@@ -109,7 +115,7 @@ Write-Host "========= Silence mode $resolvedMode [$ModeName] threshold $Threshol
 
 $ymd = (Get-Date).ToString('yyyyMMdd')
 $script:LogDirectory = Join-Path $InputDir 'logs'
-$script:DailyLogFile = Join-Path $script:LogDirectory "$ymd.txt"
+$script:DailyLogFile = Join-Path $script:LogDirectory "_$ymd.txt"
 
 
 
@@ -127,36 +133,56 @@ function AnalyzeSilence {
     $filterLogPath = ($logName -replace '\\', '/') -replace ':', '\:'
     $filter = "silencedetect=noise=$Threshold`:d=$MinSilenceSeconds,ametadata=mode=print:file='$filterLogPath'"
     $arguments = @(
-        '-hide_banner', 
-        '-nostats', 
+       # '-hide_banner', 
+       # '-nostats', 
         '-i', $fName, 
         '-af', $filter, 
         '-f', 'null', '-'
         )
     $previousPreference = $ErrorActionPreference
-    if ($debug){
+   if ($debug){
         write-host $InputDir -ForegroundColor Cyan
-        if (-not(test-path $filterLogPath)){Write-Host "PATH ERROR $filterLogPath" -ForegroundColor red }
+        if (test-path $filterLogPath){
+            Write-Host "existing $filterLogPath" -ForegroundColor red 
+            Remove-Item $filterLogPath
+        }
         if (-not(test-path $fName)){Write-Host "PATH ERROR $fName" -ForegroundColor red}
         foreach($aa in $arguments){
             Write-Host $aa -ForegroundColor Yellow
         }
-    }
+   }
 
     #$ErrorActionPreference = 'Continue'
-    try {
-        & ffmpeg @arguments 2>$null | Out-Null
-    }
-    finally {
-        $ErrorActionPreference = $previousPreference
-    }
-    if ($LASTEXITCODE -ne 0) {
-        write-host "ffmpeg silence analysis failed for '$fName' with exit code $LASTEXITCODE" -ForegroundColor red
-       # throw "ffmpeg silence analysis failed for '$fName' with exit code $LASTEXITCODE"
-    }
- 
-    if (-not (Test-Path -LiteralPath $fName -PathType Leaf)) {
-        throw "Input file not found: $fName"
+    $result=$null
+    $tries=0
+    while (-not($result)){
+        try {
+            $tries++
+           # $result=(& ffmpeg @arguments 2>$null | Out-Null ) 
+            $result=(& ffmpeg @arguments ) 
+            }
+        finally {
+            $ErrorActionPreference = $previousPreference
+        }
+        if ($LASTEXITCODE -ne 0) {
+            write-host "ffmpeg silence analysis failed for '$fName' with exit code $LASTEXITCODE" -ForegroundColor red
+        # throw "ffmpeg silence analysis failed for '$fName' with exit code $LASTEXITCODE"
+        }
+    
+        if (-not (Test-Path -LiteralPath $fName -PathType Leaf)) {
+            throw "Input file not found: $fName"
+        }
+      
+        if (-not(test-path $filterLogPath)){Write-Host "PATH ERROR $filterLogPath" -ForegroundColor red }
+        $result=get-content $filterLogPath -Tail 1
+        if ($result) {
+            write-host $result -ForegroundColor Green
+        }
+        else {
+            write-host "$tries no silence found" -ForegroundColor red
+            Start-Sleep -Seconds 3
+            if ($tries -gt 3){exit}
+        }
     }
 
      # process results from the analysis log and categorize silence segments
@@ -191,7 +217,9 @@ function AnalyzeSilence {
         $OutputCsv = [System.IO.Path]::ChangeExtension("$fName", '.Silence.csv')
     }
   
+    $linecount=0
     foreach ($line in Get-Content -LiteralPath $logName) {
+        $linecount++
         if ($line -match '^frame:(?<frame>\d+)\s+pts:(?<pts>\S+)\s+pts_time:(?<ptsTime>\S+)') {
             $currentFrame = [int]$matches.frame
             $currentPts = $matches.pts
@@ -242,11 +270,16 @@ function AnalyzeSilence {
       #  Write-Host $line
     }
 
-    if ($debug) {$result | Format-Table -Property Frame, pts, pts_time, start, end, dura, cat -AutoSize}
-    #$OutputCsv = $OutputCsv -replace '\.csv$', '.silence.csv'
-    $result | Export-Csv -LiteralPath $OutputCsv -NoTypeInformation
+    if ($linecount -gt 2){
+        if ($debug) {$result | Format-Table -Property Frame, pts, pts_time, start, end, dura, cat -AutoSize}
+        #$OutputCsv = $OutputCsv -replace '\.csv$', '.silence.csv'
+        $result | Export-Csv -LiteralPath $OutputCsv -NoTypeInformation
+        if($debug){Write-Host "=========  Silence output   $OutputCsv " }
+    }
+    else {
+        write-host "silence detect none" -ForegroundColor Red
+    }
     
-    if($debug){Write-Host "=========  Silence output   $OutputCsv " }
 }
             
 if($debug){
