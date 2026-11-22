@@ -1,8 +1,8 @@
 <# process main                                                          v2.0.5
 -------------------------------------------------------------------------------------
-    get RMS data points, analyse, mark delete sections,
+    get RMS data points, analyse where to delete and mark those delete sections,
     interpolate to ensure delete marks are continuous
-    trim and delete THEN export final result.
+
 #>
 param(
     [string]$InputDir = 'F:\av\audio\downloads',
@@ -11,8 +11,7 @@ param(
     [string[]]$fileArray = @(),
     $debug=0,
     [switch]$Latest ,
-    [Alias('M')]
-    $mode = 1,
+    [Alias('M')]$mode = 1,
     [string]$ModeName = 'Podcast'
 )
 write-host $PSCommandPath -BackgroundColor cyan

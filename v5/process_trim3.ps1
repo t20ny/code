@@ -2,6 +2,7 @@
 -------------------------------------------------------------------------------------
 aselect will select audio sections we want to keep
     delete the sections as per the delete file
+        trim and delete THEN export final result.
 #>
 
 param (

@@ -1,5 +1,5 @@
-<# silence                                            v1.0.5
-   silence detect and analyse
+<# silence                                            v1.0.6
+   silence detect and analyse the mp3 file
 #>
 param(
     [string]$InputDir="F:\av\audio\downloads",
@@ -19,6 +19,8 @@ if ($OutputCsv -notmatch "sil.csv"){
 }
 $baseName = [System.IO.Path]::GetFileNameWithoutExtension($OutputCsv)
 $OutputCsv="$OutputDir\logs\_sil.Csv"
+$script:DURCtt=0 # Duration constant category'sS total time in seconds
+$script:TOTALLENGTH=0
 
 # analyze the MP3 audio file
 $ErrorActionPreference = 'Continue'
@@ -62,53 +64,62 @@ switch ($resolvedMode) {
         [double]$MinSilenceSeconds = 0.35
         [string]$Threshold = '-35dB'
         $ModeName = 'podcast'
+        $DURCON=15  # Duration constant for speech duration category
     }
     2 {
         # Slightly more sensitive to short speech gaps and quiet breaths.
         [double]$MinSilenceSeconds = 0.25
         [string]$Threshold = '-30dB'
         $ModeName = 'speech'
+        $DURCON=15
     }
     3 {
         # Low-noise / quiet-room setting: preserves only real silence, avoids cleaning too much.
         [double]$MinSilenceSeconds = 0.50
         [string]$Threshold = '-40dB'
         $ModeName = 'quiet-room'
+        $DURCON=15
     }
     4 {
         # More aggressive dead-air removal for sleeping or low-content segments.
         [double]$MinSilenceSeconds = 1.00
         [string]$Threshold = '-45dB'
         $ModeName = 'sleep'
+        $DURCON=15
     }
     5 {
         # Noisy environment setting: removes longer loud sections but keeps speech audible.
         [double]$MinSilenceSeconds = 0.75
         [string]$Threshold = '-25dB'
         $ModeName = 'noisy'
+        $DURCON=15
     }
     6 {
         # Very aggressive cleanup for stripping filler and long gaps.
         [double]$MinSilenceSeconds = 0.12
         [string]$Threshold = '-20dB'
         $ModeName = 'aggressive'
+        $DURCON=15
     }
     7 {
         # Very aggressive 
         [double]$MinSilenceSeconds = 0.20
         [string]$Threshold = '-30dB'
         $ModeName = 'aggressive'
+        $DURCON=15
     }
     8 {
         # Very aggressive 2
         [double]$MinSilenceSeconds = 0.05
         [string]$Threshold = '-50dB'
         $ModeName = 'aggressive'
+        $DURCON=15
     }
     default {
         [double]$MinSilenceSeconds = 0.35
         [string]$Threshold = '-35dB'
         $ModeName = 'podcast'
+        $DURCON=15
     }
 }
 Write-Host "========= Silence mode $resolvedMode [$ModeName] threshold $Threshold, minimum silence $MinSilenceSeconds seconds" -ForegroundColor blue
@@ -133,8 +144,8 @@ function AnalyzeSilence {
     $filterLogPath = ($logName -replace '\\', '/') -replace ':', '\:'
     $filter = "silencedetect=noise=$Threshold`:d=$MinSilenceSeconds,ametadata=mode=print:file='$filterLogPath'"
     $arguments = @(
-       # '-hide_banner', 
-       # '-nostats', 
+        '-hide_banner', 
+        '-nostats', 
         '-i', $fName, 
         '-af', $filter, 
         '-f', 'null', '-'
@@ -158,8 +169,8 @@ function AnalyzeSilence {
     while (-not($result)){
         try {
             $tries++
-           # $result=(& ffmpeg @arguments 2>$null | Out-Null ) 
-            $result=(& ffmpeg @arguments ) 
+            $result=(& ffmpeg @arguments 2>$null | Out-Null ) 
+          #  $result=(& ffmpeg @arguments ) 
             }
         finally {
             $ErrorActionPreference = $previousPreference
@@ -230,12 +241,15 @@ function AnalyzeSilence {
         if ($line -match '^lavfi\.silence_start=(?<start>-?\d+(?:\.\d+)?)$') {
             $silenceStart = [double]$matches.start
             $speechDuration = $silenceStart - $previousSilenceEnd
+
+            if ($speechDuration -gt $DURCON) { $script:DURCTT+=$silenceDuration}
+
             $delete=0
-            $category = if ($speechDuration -gt 25) { 
+            $category = if ($speechDuration -gt $DURCON+10) { 
                 $delete=1
                 'constant25' } 
-            elseif ($speechDuration -gt 15) { 'constant15' } 
-            elseif ($speechDuration -gt 5) { 'constant5' } 
+            elseif ($speechDuration -gt $DURCON) { 'constant15' } 
+            elseif ($speechDuration -gt $DURCON-10) { 'constant5' } 
             else { 'none' }
             continue
         }
@@ -266,6 +280,8 @@ function AnalyzeSilence {
             $previousSilenceEnd = $silenceEnd
             $silenceStart = $null
             $category = 'none'
+            [int]$script:TOTALLENGTH=$silenceEnd
+            
         }
       #  Write-Host $line
     }
@@ -286,4 +302,15 @@ if($debug){
     Write-Host "========= analyze silence         ===========================================" -foregroundColor Blue
     Write-Host "Input   =  $InputFile"
 }
-AnalyzeSilence -Fname $InputFile -LogName $OutputLog
+
+
+try {
+    AnalyzeSilence -Fname $InputFile -LogName $OutputLog
+
+    $LOUDPCT =[int]$script:DURCtt/[int]$script:TOTALLENGTH
+    if ($debug){Write-Host "loudSections detected $script:logName $LOUDPCT percent"}
+    return $LOUDPCT
+}
+catch {
+    throw "Sil detect workflow failed: $($_.Exception.Message)"
+}

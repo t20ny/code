@@ -1,4 +1,4 @@
-<# trim and delete with silence                                              v3.1.2
+<# trim and delete with silence marks                                          v3.1.2
 -------------------------------------------------------------------------------------
 pre: mp3 input file together with a csv of silence marks. The rows show the time of silence with start end length of the silence.
 Post: output mp3 file trimmed of the loud sections.
@@ -175,7 +175,7 @@ function interpolate {
     param($data)
     $data = Set-DeleteState $data
     foreach ($row in $data) {
-        # step 1        
+        # step 1 reader       
         # read the delete column values 
         $deleteValue = if ($row.PSObject.Properties.Name -contains 'delet2') {
             [int]$row.delet2
@@ -203,7 +203,7 @@ function interpolate {
     }
 
 
-    # step 2
+    # step 2 start
     # start of the file are marked as delete section
     $startCutoffSeconds = 30.0
     $startSectionIndex = 0
@@ -226,7 +226,7 @@ function interpolate {
         }
     }
 
-    <# step 3
+    <# step 3 spikes
     # clear short noise bursts before filling short gaps between real delete runs
     for ($index = $startSectionIndex; $index -lt $data.Count;) {
         if ([int]$data[$index].delete -eq 0) {
@@ -239,7 +239,8 @@ function interpolate {
         } 
     }
     #>
-    # step 4
+
+    # step 4  gap fill
     # Fill short speech gaps of 2 seconds when they are bounded by delete runs.
     for ($index = $startSectionIndex; $index -lt $data.Count;) {
         if ([int]$data[$index].delete -eq 1) {
@@ -264,7 +265,7 @@ function interpolate {
         }
     }
 
-     # step 5
+     # step 5 smooth
      # Remove very short 3 seconds delete runs after the gap fill.
     for ($index = $startSectionIndex; $index -lt $data.Count;) {
         if ([int]$data[$index].delete -eq 0) {
@@ -285,7 +286,7 @@ function interpolate {
             }
         }
     }
-    # step 6
+    # step 6 pad
     # Pad 1 second before valid delete sections to keep them coherent.
     for ($index = $startSectionIndex; $index -lt $data.Count;) {
         if ([int]$data[$index].delete -ne 1) {
@@ -305,7 +306,7 @@ function interpolate {
             $data[$padIndex].cat = "ip6prePad"
         }
     }
-    # step 7
+    # step 7 end
     # end 20 seconds of the file are marked as delete section
     $endDelete = 20
     $endSectionLength = [Math]::Min($endDelete, $data.Count)
@@ -315,7 +316,7 @@ function interpolate {
         $data[$index].cat = "ip7end"
     }
 
-    # step 8 
+    # step 8 tighten
     # Tighten short noise bursts that are not part of a real delete block.
     for ($index = $startSectionIndex; $index -lt $data.Count;) {
         if ([int]$data[$index].delete -eq 0) {
