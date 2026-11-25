@@ -204,6 +204,7 @@ function AnalyzeSilence {
     $silenceStart = $null
     $previousSilenceEnd = 0.0
     $speechDuration = 0.0
+    $silenceDuration = 0.0
     $category = 'none'
     $delete=1
 
@@ -308,7 +309,7 @@ try {
     AnalyzeSilence -Fname $InputFile -LogName $OutputLog
 
     $LOUDPCT =[int]$script:DURCtt/[int]$script:TOTALLENGTH
-    if ($debug){Write-Host "loudSections detected $script:logName $LOUDPCT percent"}
+    if ($debug){Write-Host "loudSections detected $script:logName $LOUDPCT SLRatio"}
     return $LOUDPCT
 }
 catch {

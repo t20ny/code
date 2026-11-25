@@ -240,8 +240,13 @@ foreach ($file in $mp3Files) {
         & $rmsScript @allParams
 
         # 2 process silence 
-        & $silenceScript @allParams
-        
+        $SLR=0.0
+        $SLR = (& $silenceScript @allParams)
+        if ($SLR -gt 0.01){ # silence to loudness ratio
+            $allParams.mode = [int]$allParams.mode + 1 # change mode to +1 and reprocess
+            & $silenceScript @allParams
+        }
+
         # 5 trim and delete AND re-EXPORT result.
         $trimmed = (& $silencetrim @allParams)
         $trimmedSeconds = if ($null -ne $trimmed) { [int]$trimmed } else { 0 }
@@ -261,6 +266,10 @@ foreach ($file in $mp3Files) {
 
 $resultLogPath = Join-Path $OutputDir '_mp3Log.json'
 Save-Mp3Results -Path $resultLogPath -Records $script:ResultRecords
-Write-Log "Finished processing $($mp3Files.Count) MP3 file(s)."
-Write-Log "Cleaned output directory: $OutputDir"
-Write-Log "Results saved to: $resultLogPath"
+Write-Log "M$mode trim $trimmedSeconds s with SLR $SLR"
+
+if ($debug) {
+    Write-Log "Finished processing $($mp3Files.Count) MP3 file(s)."
+    Write-Log "Cleaned output directory: $OutputDir"
+    Write-Log "Results saved to: $resultLogPath"
+}

@@ -705,7 +705,7 @@ function aFilter {
     if ($mode -eq 2){                   # MODE 2
         $audioFilter = @(
             $BaseFilter,
-            "rubberband=tempo=0.75:pitch=0.995",
+        #    "rubberband=tempo=0.75:pitch=0.995",
             'equalizer=f=130:width_type=h:width=100:g=1',
             'equalizer=f=230:width_type=h:width=100:g=-2',
             'equalizer=f=480:width_type=h:width=400:g=-3',
